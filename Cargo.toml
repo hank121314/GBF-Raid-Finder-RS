@@ -1,0 +1,26 @@
+[package]
+name = "raid-finder"
+version = "0.1.0"
+authors = ["Hank Chen <hank121314@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+snafu = "0.6.10"
+serde = { version = "1.0.125", features = ["derive"] }
+serde_json = "1.0"
+protobuf = { version = "2.23.0", features = ["with-bytes"] }
+tokio = { version = "1.5", features = ["rt", "rt-multi-thread", "macros", "net", "time", "sync"] }
+regex = "1.4.6"
+bytes = "1"
+futures = "0.3"
+nanoid = "0.4.0"
+base64 = "0.13.0"
+hmac = "0.10.1"
+sha-1 = "0.9.4"
+percent-encoding = "2.1.0"
+lazy_static = "1.4.0"
+reqwest = { version = "0.11.3", features = ["stream", "json"] }
+redis = { version = "0.20.0", features = ["tokio-comp"] }
+
