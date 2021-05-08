@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "rustproto.proto";
-
 message RaidBoss {
   string boss_name = 1;
   int32 level = 2;

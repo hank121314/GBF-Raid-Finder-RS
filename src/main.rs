@@ -2,25 +2,36 @@ mod client;
 mod common;
 mod config;
 mod error;
+mod image;
+mod logger;
 mod models;
 mod parsers;
 mod proto;
 mod resources;
+mod tasks;
 
 use crate::{
-  client::filter_stream::FilterStreamClient, client::redis::Redis, config::Config, models::Tweet,
-  common::gbf_redis_key,
-  parsers::status::StatusParser, resources::BOSS_EXPIRE_IN_30_DAYS_TTL,
+  client::redis::Redis,
+  client::{filter_stream::StreamingSource, http::FilterStreamClient},
+  common::redis::gbf_translator_key,
+  config::Config,
+  error::Error,
+  models::Tweet,
+  resources::STREAM_URL,
 };
-use tokio::sync::mpsc::channel;
-use std::borrow::Borrow;
+use futures::StreamExt;
+use futures_retry::{FutureRetry, RetryPolicy};
+use log::{error as log_error, info};
+use std::sync::Arc;
+use tasks::ActorHandle;
 
-pub type Result<T, E = error::Error> = std::result::Result<T, E>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 pub async fn main() -> Result<()> {
-  let (tx, mut rx) = channel(1024);
+  logger::create_logger("/var/log/", "raid-finder-stream", 3)?;
   let redis = Redis::new("redis://127.0.0.1/")?;
+  let map = redis.get_hash_map(gbf_translator_key()).await?;
   let config = Config::new()?;
   let filter_stream_client = FilterStreamClient::new(
     config,
@@ -28,18 +39,40 @@ pub async fn main() -> Result<()> {
     "true",
   );
 
-  let consuming_raid_tweets = async move {
-    while let Some(tweet) = rx.recv().await {
-      if let Some(raid) = StatusParser::parse(tweet) {
-        let redis_key = gbf_redis_key(raid.borrow());
-        redis.set_protobuf(&redis_key, raid, BOSS_EXPIRE_IN_30_DAYS_TTL).await?;
+  let handler = Arc::new(ActorHandle::new(redis, map));
+
+  FutureRetry::new(
+    || async {
+      let mut stream: StreamingSource<Tweet> = filter_stream_client.oauth_stream(STREAM_URL).await?;
+
+      while let Some(Ok(tweet)) = stream.next().await {
+        if let Ok(raid_boss) = handler.parse_tweet(tweet).await {
+          if let Ok(translated) = handler.translate_boss_name(raid_boss.clone()).await {
+            info!("New raid boss incoming! {}", translated);
+          }
+        }
       }
-    }
-    Ok::<(), error::Error>(())
-  };
 
-  tokio::spawn(consuming_raid_tweets);
-
-  filter_stream_client.stream::<Tweet>(tx).await?;
-  Ok(())
+      Ok::<(), Error>(())
+    },
+    |e: error::Error| {
+      return match e {
+        error::Error::StreamEOFError => {
+          info!("Get EOF in twitter stream api will restart in 5 second.");
+          RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
+        }
+        error::Error::JSONParseError { error: _ } => {
+          info!("JSON Parse error by given string, stream might be cut off. Will restart stream in 5 second.");
+          RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
+        }
+        _ => {
+          log_error!("Some error encounter, error: {:?}", e);
+          RetryPolicy::ForwardError(e)
+        }
+      };
+    },
+  )
+  .await
+  .map(|result| result.0)
+  .map_err(|error| error.0)
 }

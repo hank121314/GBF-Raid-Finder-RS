@@ -1,77 +1,28 @@
 use crate::{
-  common::{current_timestamp, percent_encode},
+  client::parameter::{Parameter, ParameterConvertible},
+  common::{chrono::current_timestamp, encode::percent_encode},
   config::Config,
+  error::Error,
+  Result,
 };
 use hmac::{Hmac, Mac, NewMac};
+use http::header::{AUTHORIZATION, CONNECTION, CONTENT_TYPE};
+use isahc::config::Configurable;
 use nanoid::nanoid;
-use reqwest::header::{HeaderMap, AUTHORIZATION, CONNECTION, CONTENT_TYPE};
 use sha1::Sha1;
-use std::borrow::{Borrow, Cow};
-
-/// Trait for Twitter OAuth 1.0a formation.
-///
-/// For Twitter OAuth 1.0a, parameters will have two kinds of representation.
-/// The first one is used to create signature or query. It should format as `format("{}={}")`.
-/// The second one is used to create "Oauth Authorization Header". It should format as `format("{}=\"{}\"")`.
-pub trait ParameterConvertible {
-  fn as_percent_encoding(&self) -> String;
-  fn as_http_parameter(&self) -> String;
-  fn as_http_query(&self) -> (&str, &str);
-}
-
-#[derive(Clone, Debug)]
-pub struct Parameter<'a> {
-  pub key: Cow<'a, str>,
-  pub value: Cow<'a, str>,
-}
-
-impl<S1, S2> From<(S1, S2)> for Parameter<'_>
-where
-  S1: Into<String>,
-  S2: Into<String>,
-{
-  fn from((key, value): (S1, S2)) -> Self {
-    Parameter {
-      key: Cow::Owned(key.into()),
-      value: Cow::Owned(value.into()),
-    }
-  }
-}
-
-impl ParameterConvertible for Parameter<'_> {
-  fn as_percent_encoding(&self) -> String {
-    format!(
-      "{}={}",
-      percent_encode(self.key.borrow()),
-      percent_encode(self.value.borrow())
-    )
-  }
-
-  fn as_http_parameter(&self) -> String {
-    format!(
-      "{}=\"{}\"",
-      percent_encode(self.key.borrow()),
-      percent_encode(self.value.borrow())
-    )
-  }
-
-  /// This type is for reqwest query, it will takes a slice of &str tuples.
-  fn as_http_query(&self) -> (&str, &str) {
-    (self.key.borrow(), self.value.borrow())
-  }
-}
+use std::borrow::Borrow;
 
 /// Container of all oauth headers except signature
-pub struct OAuthParameters<'a> {
-  pub consumer_key: Parameter<'a>,
-  pub nonce: Parameter<'a>,
-  pub signature_method: Parameter<'a>,
-  pub timestamp: Parameter<'a>,
-  pub token: Parameter<'a>,
-  pub version: Parameter<'a>,
+pub struct OAuthParameters {
+  pub consumer_key: Parameter,
+  pub nonce: Parameter,
+  pub signature_method: Parameter,
+  pub timestamp: Parameter,
+  pub token: Parameter,
+  pub version: Parameter,
 }
 
-impl OAuthParameters<'_> {
+impl OAuthParameters {
   pub fn new<S1, S2, S3>(consumer_key: S1, token: S2, version: S3) -> Self
   where
     S1: Into<String>,
@@ -101,27 +52,32 @@ impl OAuthParameters<'_> {
   }
 }
 
-pub struct OAuthRequestBuilder<'a> {
+pub struct OAuthRequestBuilder {
   pub url: String,
   pub method: String,
-  pub config: Config<'a>,
-  pub oauth: OAuthParameters<'a>,
-  pub query: Vec<Parameter<'a>>,
+  pub config: Config,
+  pub oauth: OAuthParameters,
+  pub query: Vec<Parameter>,
 }
 
-impl<'a> OAuthRequestBuilder<'a> {
-  pub fn new<S1, S2, V>(url: S1, method: S2, config: Config<'a>, oauth: OAuthParameters<'a>, query: V) -> Self
+impl OAuthRequestBuilder {
+  pub fn new<S1, S2, I: IntoIterator<Item = Parameter>>(
+    url: S1,
+    method: S2,
+    config: Config,
+    oauth: OAuthParameters,
+    query: I,
+  ) -> Self
   where
     S1: Into<String>,
     S2: Into<String>,
-    V: Into<Vec<Parameter<'a>>>,
   {
     OAuthRequestBuilder {
       url: url.into(),
       method: method.into(),
       config,
       oauth,
-      query: query.into(),
+      query: query.into_iter().map(|q| q.into()).collect::<Vec<_>>(),
     }
   }
 
@@ -196,32 +152,34 @@ impl<'a> OAuthRequestBuilder<'a> {
   }
 
   /// Return query as reqwest acceptable type
-  fn query(&self) -> Vec<(&str, &str)> {
+  fn query(&self) -> String {
     self
       .query
       .iter()
-      .map(|q| q.as_http_query())
-      .collect::<Vec<(&str, &str)>>()
+      .map(|q| format!("{}={}", q.key, percent_encode(q.value.as_ref())))
+      .collect::<Vec<_>>()
+      .join("&")
   }
 
   /// Build RequestBuilder
   ///
   /// If self.method is not a valid Http Method it will return null.
-  pub fn build(&self) -> Option<reqwest::RequestBuilder> {
-    let client = reqwest::Client::new();
+  pub fn build(&self) -> Result<http::Request<()>> {
+    let builder = http::Request::builder();
+    let host = format!("{}?{}", self.url.clone(), self.query());
 
-    let url = self.url.clone();
-    let mut headers = HeaderMap::new();
-    let query = self.query();
-
-    headers.insert(CONNECTION, "close".parse().unwrap());
-    headers.insert(CONTENT_TYPE, "application/x-www-form-urlencoded".parse().unwrap());
-    headers.insert(AUTHORIZATION, self.create_authorization_header().parse().unwrap());
-
-    if let Ok(method) = self.method.clone().parse::<reqwest::Method>() {
-      return Some(client.request(method, url).headers(headers).query(&query));
+    if let Ok(method) = self.method.clone().parse::<http::Method>() {
+      return builder
+        .low_speed_timeout(128, std::time::Duration::new(5, 0))
+        .method(method)
+        .uri(host)
+        .header(CONNECTION, "close")
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(AUTHORIZATION, self.create_authorization_header())
+        .body(())
+        .map_err(|_| Error::CannotBuildRequest);
     }
 
-    None
+    Err(Error::InvalidHttpMethod)
   }
 }

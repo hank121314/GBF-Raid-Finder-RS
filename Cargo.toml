@@ -3,24 +3,42 @@ name = "raid-finder"
 version = "0.1.0"
 authors = ["Hank Chen <hank121314@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
 
 [dependencies]
+# a library to easily assign underlying errors into domain-specific errors while adding context.
 snafu = "0.6.10"
+# json serialization and deserialization
 serde = { version = "1.0.125", features = ["derive"] }
 serde_json = "1.0"
+# Raw data for raid boss and tweets
 protobuf = { version = "2.23.0", features = ["with-bytes"] }
+# Async event loop
 tokio = { version = "1.5", features = ["rt", "rt-multi-thread", "macros", "net", "time", "sync"] }
-regex = "1.4.6"
-bytes = "1"
 futures = "0.3"
+futures-retry = "0.6.0"
+# Websockets
+tokio-tungstenite = "0.14.0"
+# logger
+log = "0.4.14"
+log4rs = "1.0.0"
+# Regex
+regex = "1.4.6"
+# OAuth encoding related
 nanoid = "0.4.0"
 base64 = "0.13.0"
 hmac = "0.10.1"
 sha-1 = "0.9.4"
 percent-encoding = "2.1.0"
+# Image comparison related
+load_image = "2.12.1"
+imgref = "1.9.0"
+dssim = "3.0.1"
 lazy_static = "1.4.0"
+# Http request related
+isahc = "1.3.1"
+http = "0.2.4"
 reqwest = { version = "0.11.3", features = ["stream", "json"] }
+# Database
 redis = { version = "0.20.0", features = ["tokio-comp"] }
 

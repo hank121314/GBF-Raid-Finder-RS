@@ -1,4 +1,7 @@
-use crate::{models::{Language, Tweet}, proto::raid_boss::RaidBoss};
+use crate::{
+  models::{Language, Tweet},
+  proto::raid_boss::RaidBoss,
+};
 
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
@@ -38,17 +41,45 @@ impl StatusParser {
   }
 
   fn match_raid(raid_cap: Captures, tweet: &Tweet, language: Language) -> Option<RaidBoss> {
-    if let (Some(boss_cap), Some(image)) = (BOSS_REGEX.captures(&raid_cap["boss"]), Self::get_media_image_by_tweet(&tweet),) {
-      let boss_name = boss_cap["boss_name"].to_owned();
-      let level = boss_cap["level"].parse::<i32>().unwrap_or(0);
-      let mut raid_boss = RaidBoss::new();
-      raid_boss.set_boss_name(boss_name);
-      raid_boss.set_level(level);
+    let boss_name = raid_cap["boss"].to_owned();
+    let mut level = 0;
+    let mut raid_boss = RaidBoss::new();
+    if let Some(boss_cap) = BOSS_REGEX.captures(&raid_cap["boss"]) {
+      level = boss_cap["level"].parse::<i32>().unwrap_or(0);
+    }
+    raid_boss.set_boss_name(boss_name);
+    raid_boss.set_level(level);
+    raid_boss.set_language(language.to_string());
+    if let Some(image) = Self::get_media_image_by_tweet(&tweet) {
       raid_boss.set_image(image);
-      raid_boss.set_language(language.to_string());
       return Some(raid_boss);
     }
 
     None
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::models::{Entity, Language, Media, Tweet};
+
+  #[test]
+  fn test_jp_parser() {
+    let tweet = Tweet {
+      id: 1390247452125458434,
+      text: "麻痹延长 7D705AE2 :参戦ID\n参加者募集！\nLv150 プロトバハムート\nhttps://t.co/MYfvDDTSrh".into(),
+      source: r#"<a href="http://granbluefantasy.jp/" rel="nofollow">グランブルー ファンタジー</a>"#.into(),
+      entities: Entity {
+        media: Some(vec![Media {
+          media_url_https: "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg".into(),
+        }]),
+      },
+    };
+    let raid_boss = StatusParser::parse(tweet).unwrap();
+    assert_eq!("Lv150 プロトバハムート", raid_boss.get_boss_name());
+    assert_eq!(150, raid_boss.get_level());
+    assert_eq!("https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg", raid_boss.get_image());
+    assert_eq!(Language::Japanese.to_string(), raid_boss.get_language());
   }
 }

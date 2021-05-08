@@ -1,60 +1,94 @@
-use crate::{
-  client::parameters::{OAuthParameters, OAuthRequestBuilder, Parameter},
-  config::Config,
-  error::Error,
-  resources::STREAM_URL,
-  Result,
+use crate::{error, Result};
+
+use futures::{AsyncRead, Future, Stream};
+use http::Request;
+use isahc::{AsyncBody, RequestExt, ResponseFuture};
+use serde::de::DeserializeOwned;
+use std::{
+  pin::Pin,
+  task::{Context, Poll},
 };
 
-use futures::StreamExt;
-use serde::de::DeserializeOwned;
-use tokio::sync::mpsc::Sender;
-
-#[derive(Clone)]
-/// Internal Representation of a Client
-pub struct FilterStreamClient<'a> {
-  config: Config<'a>,
-  parameters: Vec<Parameter<'a>>,
+pub struct StreamingSource<T: DeserializeOwned + std::fmt::Debug> {
+  body: Option<AsyncBody>,
+  request: Option<Request<()>>,
+  response: Option<ResponseFuture<'static>>,
+  tweet: Option<T>,
 }
 
-impl<'a> FilterStreamClient<'a> {
-  pub fn new(config: Config<'a>, track: Vec<&'a str>, stall_warning: &'a str) -> Self {
-    let stall_warning: Parameter = ("stall_warning", stall_warning).into();
-    let track: Parameter = ("track", track.join(",")).into();
-
-    FilterStreamClient {
-      config,
-      parameters: vec![stall_warning, track],
+impl<T> StreamingSource<T>
+where
+  T: DeserializeOwned + std::fmt::Debug,
+{
+  pub fn new(request: Request<()>) -> Self {
+    Self {
+      request: Some(request),
+      response: None,
+      body: None,
+      tweet: None,
     }
   }
+}
 
-  pub async fn stream<T: DeserializeOwned + Send>(&self, sender: Sender<T>) -> Result<()> {
-    let oauth = OAuthParameters::new(self.config.api_key.clone(), self.config.access_token.clone(), "1.0");
-    let oauth_builder = OAuthRequestBuilder::new(
-      STREAM_URL,
-      reqwest::Method::POST.as_str(),
-      self.config.clone(),
-      oauth,
-      self.parameters.as_slice(),
-    );
+impl<T> Unpin for StreamingSource<T> where T: DeserializeOwned + std::fmt::Debug {}
 
-    if let Some(request) = oauth_builder.build() {
-      let mut response = request
-        .send()
-        .await
-        .map_err(|error| Error::CannotGetStream { error })?
-        .bytes_stream();
+impl<T> Stream for StreamingSource<T>
+where
+  T: DeserializeOwned + std::fmt::Debug,
+{
+  type Item = Result<T>;
 
-      while let Some(item) = response.next().await {
-        let bytes = item.map_err(|error| Error::BytesParseError { error })?;
-        let string = String::from_utf8(bytes.to_vec()).unwrap();
-        let data = serde_json::from_str::<T>(&string).map_err(|error| Error::JSONParseError { error })?;
-        sender.send(data).await.map_err(|_| Error::SenderSendError)?;
-      }
-
-      return Ok(());
+  fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    if let Some(req) = self.request.take() {
+      self.response = Some(req.send_async());
     }
 
-    Err(Error::CannotBuildRequest)
+    if let Some(mut response) = self.response.take() {
+      match Pin::new(&mut response).poll(cx) {
+        Poll::Pending => {
+          self.response = Some(response);
+          return Poll::Pending;
+        }
+        Poll::Ready(Err(error)) => return Poll::Ready(Some(Err(error::Error::CannotGetStream { error }))),
+        Poll::Ready(Ok(res)) => {
+          let status_code = res.status();
+          if !status_code.is_success() {
+            return Poll::Ready(Some(Err(error::Error::BadResponseError)));
+          }
+
+          self.body = Some(res.into_body());
+        }
+      };
+    }
+
+    if let Some(mut body) = self.body.take() {
+      let mut buffer = [0; 16384];
+      loop {
+        return match Pin::new(&mut body).poll_read(cx, &mut buffer) {
+          Poll::Pending => {
+            self.body = Some(body);
+            Poll::Pending
+          }
+          Poll::Ready(Err(_)) => {
+            self.body = Some(body);
+            Poll::Ready(Some(Err(error::Error::StreamEOFError)))
+          }
+          Poll::Ready(Ok(len)) => {
+            let string = String::from_utf8(buffer[..len].to_owned())
+              .map_err(|error| error::Error::StringParseFromBytesError { error })?;
+            self.body = Some(body);
+            let data =
+              serde_json::from_str::<T>(string.as_ref()).map_err(|error| error::Error::JSONParseError { error })?;
+            self.tweet = Some(data);
+            if let Some(tweet) = self.tweet.take() {
+              return Poll::Ready(Some(Ok(tweet)));
+            }
+            Poll::Ready(Some(Err(error::Error::StreamEOFError)))
+          }
+        };
+      }
+    } else {
+      return Poll::Ready(Some(Err(error::Error::FutureAlreadyCompleted)));
+    }
   }
 }
