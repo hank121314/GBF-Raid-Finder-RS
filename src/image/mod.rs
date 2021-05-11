@@ -62,7 +62,7 @@ impl Comparison {
     for matcher in self.matchers.clone() {
       let modified = self.get_image_from_url(matcher.get_image()).await?;
       let comparison = self.context.compare(&origin, &modified);
-      if f64::from(comparison.0) < f64::from(0.3) {
+      if comparison.0 < 0.3 {
         return Ok(Some(matcher));
       }
     }
@@ -88,6 +88,7 @@ impl Comparison {
     self.load_image_to_image_data(img)
   }
 
+  /// Load image from bytes and crop out the bottom 25%
   fn load_image_to_image_data(&self, img: load_image::Image) -> Result<DssimImage<f32>> {
     match img.bitmap {
       ImageData::RGB8(ref bitmap) => {

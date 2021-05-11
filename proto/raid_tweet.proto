@@ -1,12 +1,12 @@
 syntax = "proto3";
 
 message RaidTweet {
-  string tweet_id = 1;
+  uint64 tweet_id = 1;
   string screen_name = 2;
   string boss_name = 3;
   string raid_id = 4;
   string text = 5;
-  uint32 created = 6;
+  uint64 created = 6;
   string language = 7;
   string profile_image = 8;
 }

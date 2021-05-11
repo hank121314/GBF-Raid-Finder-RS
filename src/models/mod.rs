@@ -26,20 +26,28 @@ impl std::str::FromStr for Language {
   }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Media {
   pub media_url_https: String,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity {
   pub media: Option<Vec<Media>>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct User {
+  pub screen_name: String,
+  pub profile_image_url_https: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tweet {
   pub id: u64,
   pub text: String,
   pub source: String,
   pub entities: Entity,
+  pub timestamp_ms: String,
+  pub user: User,
 }

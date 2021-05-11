@@ -13,7 +13,7 @@ mod tasks;
 use crate::{
   client::redis::Redis,
   client::{filter_stream::StreamingSource, http::FilterStreamClient},
-  common::redis::gbf_translator_key,
+  common::redis::GBF_TRANSLATOR_KEY,
   config::Config,
   error::Error,
   models::Tweet,
@@ -23,32 +23,46 @@ use futures::StreamExt;
 use futures_retry::{FutureRetry, RetryPolicy};
 use log::{error as log_error, info};
 use std::sync::Arc;
-use tasks::ActorHandle;
+use tasks::TweetActorHandle;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 pub async fn main() -> Result<()> {
   logger::create_logger("/var/log/", "raid-finder-stream", 3)?;
-  let redis = Redis::new("redis://127.0.0.1/")?;
-  let map = redis.get_hash_map(gbf_translator_key()).await?;
+
   let config = Config::new()?;
+
+  // Create twitter filter stream client
   let filter_stream_client = FilterStreamClient::new(
     config,
     vec!["参加者募集！", ":参戦ID", "I need backup!", ":Battle ID"],
     "true",
   );
 
-  let handler = Arc::new(ActorHandle::new(redis, map));
+  // Create tweet handler
+  let redis = Redis::new("redis://127.0.0.1/")?;
+
+  let map = redis.get_hash_map(GBF_TRANSLATOR_KEY).await?;
+
+  let tweet_handler = Arc::new(TweetActorHandle::new(redis, map));
 
   FutureRetry::new(
     || async {
       let mut stream: StreamingSource<Tweet> = filter_stream_client.oauth_stream(STREAM_URL).await?;
 
-      while let Some(Ok(tweet)) = stream.next().await {
-        if let Ok(raid_boss) = handler.parse_tweet(tweet).await {
-          if let Ok(translated) = handler.translate_boss_name(raid_boss.clone()).await {
-            info!("New raid boss incoming! {}", translated);
+      while let Some(data) = stream.next().await {
+        let tweet = data?;
+        if let Some((raid_boss, mut raid_tweet)) = tweet_handler.parse_tweet(tweet).await? {
+          let boss_name: String = raid_boss.get_boss_name().into();
+          if let Some(translated_boss_name) = tweet_handler.translate_boss_name(raid_boss).await? {
+            // We can infer from empty translated_boss_name that the task is pending
+            if translated_boss_name.is_empty() {
+              info!("Translating task of {} is pending...", boss_name);
+            } else {
+              raid_tweet.set_boss_name(translated_boss_name);
+              tweet_handler.persist_raid_tweet(raid_tweet).await;
+            }
           }
         }
       }

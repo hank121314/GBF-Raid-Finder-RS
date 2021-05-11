@@ -1,6 +1,6 @@
 use crate::{
   models::{Language, Tweet},
-  proto::raid_boss::RaidBoss,
+  proto::{raid_boss::RaidBoss, raid_tweet::RaidTweet},
 };
 
 use lazy_static::lazy_static;
@@ -19,7 +19,7 @@ lazy_static! {
 pub struct StatusParser {}
 
 impl StatusParser {
-  pub fn parse(tweet: Tweet) -> Option<RaidBoss> {
+  pub fn parse(tweet: Tweet) -> Option<(RaidBoss, RaidTweet)> {
     if let Some(jp_raid) = JPRAID_REGEX.captures(&tweet.text) {
       return Self::match_raid(jp_raid, &tweet, Language::Japanese);
     };
@@ -40,29 +40,43 @@ impl StatusParser {
     None
   }
 
-  fn match_raid(raid_cap: Captures, tweet: &Tweet, language: Language) -> Option<RaidBoss> {
+  fn match_raid(raid_cap: Captures, tweet: &Tweet, language: Language) -> Option<(RaidBoss, RaidTweet)> {
     let boss_name = raid_cap["boss"].to_owned();
     let mut level = 0;
     let mut raid_boss = RaidBoss::new();
     if let Some(boss_cap) = BOSS_REGEX.captures(&raid_cap["boss"]) {
       level = boss_cap["level"].parse::<i32>().unwrap_or(0);
     }
-    raid_boss.set_boss_name(boss_name);
+    raid_boss.set_boss_name(boss_name.clone());
     raid_boss.set_level(level);
     raid_boss.set_language(language.to_string());
-    if let Some(image) = Self::get_media_image_by_tweet(&tweet) {
-      raid_boss.set_image(image);
-      return Some(raid_boss);
-    }
 
-    None
+    match Self::get_media_image_by_tweet(&tweet) {
+      Some(image) => {
+        raid_boss.set_image(image);
+        let created = tweet.timestamp_ms.parse::<u64>().unwrap();
+        let raid_tweet = RaidTweet::with_args(
+          tweet.id,
+          &tweet.user.screen_name,
+          created,
+          boss_name,
+          &raid_cap["battle_id"],
+          &raid_cap["extra"],
+          language,
+          &tweet.user.profile_image_url_https,
+        );
+
+        Some((raid_boss, raid_tweet))
+      }
+      _ => None,
+    }
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::models::{Entity, Language, Media, Tweet};
+  use crate::models::{Entity, Language, Media, Tweet, User};
 
   #[test]
   fn test_jp_parser() {
@@ -75,8 +89,13 @@ mod tests {
           media_url_https: "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg".into(),
         }]),
       },
+      timestamp_ms: "1620698515453".to_string(),
+      user: User {
+        screen_name: "".to_string(),
+        profile_image_url_https: "".to_string(),
+      },
     };
-    let raid_boss = StatusParser::parse(tweet).unwrap();
+    let raid_boss = StatusParser::parse(tweet).unwrap().0;
     assert_eq!("Lv150 プロトバハムート", raid_boss.get_boss_name());
     assert_eq!(150, raid_boss.get_level());
     assert_eq!("https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg", raid_boss.get_image());

@@ -18,8 +18,8 @@
 #![allow(unused_imports)]
 #![allow(unused_results)]
 //! Generated file from `raid_tweet.proto`
-use crate::models::Language;
 
+use crate::models::Language;
 use protobuf::Message;
 
 /// Generated files are compatible only with the same version
@@ -29,12 +29,12 @@ use protobuf::Message;
 #[derive(PartialEq,Clone,Default)]
 pub struct RaidTweet {
     // message fields
-    pub tweet_id: ::std::string::String,
+    pub tweet_id: u64,
     pub screen_name: ::std::string::String,
     pub boss_name: ::std::string::String,
     pub raid_id: ::std::string::String,
     pub text: ::std::string::String,
-    pub created: u32,
+    pub created: u64,
     pub language: ::std::string::String,
     pub profile_image: ::std::string::String,
     // special fields
@@ -52,55 +52,41 @@ impl RaidTweet {
     pub fn new() -> RaidTweet {
         ::std::default::Default::default()
     }
-    
-    pub fn with_args<S1, S2, S3, S4, S5, S6>
-        (tweet_id: S1, screen_name: S2, created: u32, boss_name: S3, raid_id: S4, text: S5, language: Language, profile_image: S6) -> Self 
-    where 
-    S1: Into<String>,
-    S2: Into<String>,
-    S3: Into<String>,
-    S4: Into<String>,
-    S5: Into<String>,
-    S6: Into<String>,
-        {
-            Self {
-                tweet_id: tweet_id.into(),
-                screen_name: screen_name.into(),
-                created,
-                boss_name: boss_name.into(),
-                raid_id: raid_id.into(),
-                text: text.into(),
-                language: language.to_string(),
-                profile_image: profile_image.into(),
-                unknown_fields: Default::default(),
-                cached_size: Default::default()
-            }
+
+    // uint64 tweet_id = 1;
+    pub fn with_args<S1, S2, S3, S4, S5>
+    (tweet_id: u64, screen_name: S1, created: u64, boss_name: S2, raid_id: S3, text: S4, language: Language, profile_image: S5) -> Self
+        where
+          S1: Into<String>,
+          S2: Into<String>,
+          S3: Into<String>,
+          S4: Into<String>,
+          S5: Into<String>,
+    {
+        Self {
+            tweet_id,
+            screen_name: screen_name.into(),
+            created,
+            boss_name: boss_name.into(),
+            raid_id: raid_id.into(),
+            text: text.into(),
+            language: language.to_string(),
+            profile_image: profile_image.into(),
+            unknown_fields: Default::default(),
+            cached_size: Default::default()
         }
+    }
 
-    // string tweet_id = 1;
-
-
-    pub fn get_tweet_id(&self) -> &str {
-        &self.tweet_id
+    pub fn get_tweet_id(&self) -> u64 {
+        self.tweet_id
     }
     pub fn clear_tweet_id(&mut self) {
-        self.tweet_id.clear();
+        self.tweet_id = 0;
     }
 
     // Param is passed by value, moved
-    pub fn set_tweet_id(&mut self, v: ::std::string::String) {
+    pub fn set_tweet_id(&mut self, v: u64) {
         self.tweet_id = v;
-    }
-
-    // Mutable pointer to the field.
-    // If field is not initialized, it is initialized with default value first.
-    pub fn mut_tweet_id(&mut self) -> &mut ::std::string::String {
-        &mut self.tweet_id
-    }
-
-    // Take field
-    pub fn take_tweet_id(&mut self) -> ::std::string::String {
-        ::std::mem::replace(&mut self.tweet_id, ::std::string::String::new())
     }
 
     // string screen_name = 2;
@@ -207,10 +193,10 @@ impl RaidTweet {
         ::std::mem::replace(&mut self.text, ::std::string::String::new())
     }
 
-    // uint32 created = 6;
+    // uint64 created = 6;
 
 
-    pub fn get_created(&self) -> u32 {
+    pub fn get_created(&self) -> u64 {
         self.created
     }
     pub fn clear_created(&mut self) {
@@ -218,7 +204,7 @@ impl RaidTweet {
     }
 
     // Param is passed by value, moved
-    pub fn set_created(&mut self, v: u32) {
+    pub fn set_created(&mut self, v: u64) {
         self.created = v;
     }
 
@@ -285,7 +271,11 @@ impl ::protobuf::Message for RaidTweet {
             let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
-                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.tweet_id)?;
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_uint64()?;
+                    self.tweet_id = tmp;
                 },
                 2 => {
                     ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.screen_name)?;
@@ -303,7 +293,7 @@ impl ::protobuf::Message for RaidTweet {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     }
-                    let tmp = is.read_uint32()?;
+                    let tmp = is.read_uint64()?;
                     self.created = tmp;
                 },
                 7 => {
@@ -324,8 +314,8 @@ impl ::protobuf::Message for RaidTweet {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if !self.tweet_id.is_empty() {
-            my_size += ::protobuf::rt::string_size(1, &self.tweet_id);
+        if self.tweet_id != 0 {
+            my_size += ::protobuf::rt::value_size(1, self.tweet_id, ::protobuf::wire_format::WireTypeVarint);
         }
         if !self.screen_name.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.screen_name);
@@ -354,8 +344,8 @@ impl ::protobuf::Message for RaidTweet {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        if !self.tweet_id.is_empty() {
-            os.write_string(1, &self.tweet_id)?;
+        if self.tweet_id != 0 {
+            os.write_uint64(1, self.tweet_id)?;
         }
         if !self.screen_name.is_empty() {
             os.write_string(2, &self.screen_name)?;
@@ -370,7 +360,7 @@ impl ::protobuf::Message for RaidTweet {
             os.write_string(5, &self.text)?;
         }
         if self.created != 0 {
-            os.write_uint32(6, self.created)?;
+            os.write_uint64(6, self.created)?;
         }
         if !self.language.is_empty() {
             os.write_string(7, &self.language)?;
@@ -416,7 +406,7 @@ impl ::protobuf::Message for RaidTweet {
         static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
         descriptor.get(|| {
             let mut fields = ::std::vec::Vec::new();
-            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint64>(
                 "tweet_id",
                 |m: &RaidTweet| { &m.tweet_id },
                 |m: &mut RaidTweet| { &mut m.tweet_id },
@@ -441,7 +431,7 @@ impl ::protobuf::Message for RaidTweet {
                 |m: &RaidTweet| { &m.text },
                 |m: &mut RaidTweet| { &mut m.text },
             ));
-            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint32>(
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint64>(
                 "created",
                 |m: &RaidTweet| { &m.created },
                 |m: &mut RaidTweet| { &mut m.created },
@@ -472,7 +462,7 @@ impl ::protobuf::Message for RaidTweet {
 
 impl ::protobuf::Clear for RaidTweet {
     fn clear(&mut self) {
-        self.tweet_id.clear();
+        self.tweet_id = 0;
         self.screen_name.clear();
         self.boss_name.clear();
         self.raid_id.clear();
@@ -498,13 +488,13 @@ impl ::protobuf::reflect::ProtobufValue for RaidTweet {
 
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x10raid_tweet.proto\"\xec\x01\n\tRaidTweet\x12\x19\n\x08tweet_id\x18\
-    \x01\x20\x01(\tR\x07tweetId\x12\x1f\n\x0bscreen_name\x18\x02\x20\x01(\tR\
-    \nscreenName\x12\x1b\n\tboss_name\x18\x03\x20\x01(\tR\x08bossName\x12\
+    \x01\x20\x01(\x04R\x07tweetId\x12\x1f\n\x0bscreen_name\x18\x02\x20\x01(\
+    \tR\nscreenName\x12\x1b\n\tboss_name\x18\x03\x20\x01(\tR\x08bossName\x12\
     \x17\n\x07raid_id\x18\x04\x20\x01(\tR\x06raidId\x12\x12\n\x04text\x18\
-    \x05\x20\x01(\tR\x04text\x12\x18\n\x07created\x18\x06\x20\x01(\rR\x07cre\
-    ated\x12\x1a\n\x08language\x18\x07\x20\x01(\tR\x08language\x12#\n\rprofi\
-    le_image\x18\x08\x20\x01(\tR\x0cprofileImageJ\xe2\x03\n\x06\x12\x04\0\0\
-    \x0b\x01\n\x08\n\x01\x0c\x12\x03\0\0\x12\n\n\n\x02\x04\0\x12\x04\x02\0\
+    \x05\x20\x01(\tR\x04text\x12\x18\n\x07created\x18\x06\x20\x01(\x04R\x07c\
+    reated\x12\x1a\n\x08language\x18\x07\x20\x01(\tR\x08language\x12#\n\rpro\
+    file_image\x18\x08\x20\x01(\tR\x0cprofileImageJ\xe2\x03\n\x06\x12\x04\0\
+    \0\x0b\x01\n\x08\n\x01\x0c\x12\x03\0\0\x12\n\n\n\x02\x04\0\x12\x04\x02\0\
     \x0b\x01\n\n\n\x03\x04\0\x01\x12\x03\x02\x08\x11\n\x0b\n\x04\x04\0\x02\0\
     \x12\x03\x03\x02\x16\n\x0c\n\x05\x04\0\x02\0\x05\x12\x03\x03\x02\x08\n\
     \x0c\n\x05\x04\0\x02\0\x01\x12\x03\x03\t\x11\n\x0c\n\x05\x04\0\x02\0\x03\

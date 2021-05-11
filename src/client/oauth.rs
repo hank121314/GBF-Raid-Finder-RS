@@ -77,7 +77,7 @@ impl OAuthRequestBuilder {
       method: method.into(),
       config,
       oauth,
-      query: query.into_iter().map(|q| q.into()).collect::<Vec<_>>(),
+      query: query.into_iter().map(|q| q).collect::<Vec<_>>(),
     }
   }
 
@@ -151,7 +151,7 @@ impl OAuthRequestBuilder {
     format!("OAuth {}", header_parameters.join(", "))
   }
 
-  /// Return query as reqwest acceptable type
+  /// Return query as url encoded string.
   fn query(&self) -> String {
     self
       .query
@@ -163,7 +163,7 @@ impl OAuthRequestBuilder {
 
   /// Build RequestBuilder
   ///
-  /// If self.method is not a valid Http Method it will return null.
+  /// If self.method is not a valid Http Method it will return an error.
   pub fn build(&self) -> Result<http::Request<()>> {
     let builder = http::Request::builder();
     let host = format!("{}?{}", self.url.clone(), self.query());

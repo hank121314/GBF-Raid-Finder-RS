@@ -9,7 +9,7 @@ use std::{
   task::{Context, Poll},
 };
 
-pub struct StreamingSource<T: DeserializeOwned + std::fmt::Debug> {
+pub struct StreamingSource<T: DeserializeOwned> {
   body: Option<AsyncBody>,
   request: Option<Request<()>>,
   response: Option<ResponseFuture<'static>>,
@@ -18,7 +18,7 @@ pub struct StreamingSource<T: DeserializeOwned + std::fmt::Debug> {
 
 impl<T> StreamingSource<T>
 where
-  T: DeserializeOwned + std::fmt::Debug,
+  T: DeserializeOwned,
 {
   pub fn new(request: Request<()>) -> Self {
     Self {
@@ -30,11 +30,11 @@ where
   }
 }
 
-impl<T> Unpin for StreamingSource<T> where T: DeserializeOwned + std::fmt::Debug {}
+impl<T> Unpin for StreamingSource<T> where T: DeserializeOwned {}
 
 impl<T> Stream for StreamingSource<T>
 where
-  T: DeserializeOwned + std::fmt::Debug,
+  T: DeserializeOwned,
 {
   type Item = Result<T>;
 
@@ -88,7 +88,7 @@ where
         };
       }
     } else {
-      return Poll::Ready(Some(Err(error::Error::FutureAlreadyCompleted)));
+      Poll::Ready(Some(Err(error::Error::FutureAlreadyCompleted)))
     }
   }
 }

@@ -17,7 +17,7 @@ pub struct FilterStreamClient {
 }
 
 impl FilterStreamClient {
-  /// Create an TwitterFilterStreamClient with `Config`, `track` and `stall_warning`
+  /// Create an Twitter Filter Stream Client with `Config`, `track` and `stall_warning`
   ///
   /// # Arguments
   /// * `config` - an `Config` instance which contain your environment variable
@@ -48,10 +48,7 @@ impl FilterStreamClient {
     }
   }
 
-  pub async fn oauth_stream<S, T: DeserializeOwned + std::fmt::Debug>(
-    &self,
-    url: S,
-  ) -> Result<StreamingSource<T>>
+  pub async fn oauth_stream<S, T: DeserializeOwned>(&self, url: S) -> Result<StreamingSource<T>>
   where
     S: Into<String>,
   {

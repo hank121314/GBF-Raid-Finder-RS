@@ -3,11 +3,11 @@ use redis::{AsyncCommands, Client};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::{convert::TryInto, sync::Arc};
+use std::convert::TryInto;
 
 #[derive(Clone)]
 pub struct Redis {
-  client: Arc<Client>,
+  client: Client,
 }
 
 impl Redis {
@@ -17,7 +17,7 @@ impl Redis {
   {
     let client = redis::Client::open(address.into()).map_err(|error| error::Error::RedisConnectionError { error })?;
     Ok(Redis {
-      client: Arc::new(client),
+      client,
     })
   }
 
@@ -50,16 +50,18 @@ impl Redis {
       .get_tokio_connection()
       .await
       .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+
     let redis_keys = keys.into_iter().map(|key| key.into()).collect::<Vec<String>>();
+
     let bytes: Vec<Vec<u8>> = connection
-      .get(redis_keys)
-      .await
-      .map_err(|error| error::Error::RedisGetValueError { error })?;
+        .get(redis_keys)
+        .await
+        .map_err(|error| error::Error::RedisGetValueError { error })?;
 
     bytes
-      .into_iter()
-      .map(|ref byte| T::parse_from_bytes(byte).map_err(|error| error::Error::ProtobufParseError { error }))
-      .collect()
+        .into_iter()
+        .map(|ref byte| T::parse_from_bytes(byte).map_err(|error| error::Error::ProtobufParseError { error }))
+        .collect()
   }
 
   pub async fn get_hash_map<S, K, V>(&self, key: S) -> Result<HashMap<K, V>>
@@ -73,7 +75,7 @@ impl Redis {
       .get_tokio_connection()
       .await
       .map_err(|error| error::Error::RedisGetConnectionError { error })?;
-    let string: String = connection.get(key.into()).await.unwrap_or("{}".into());
+    let string: String = connection.get(key.into()).await.unwrap_or_else(|_|"{}".into());
 
     serde_json::from_str::<HashMap<K, V>>(string.as_ref()).map_err(|error| error::Error::JSONParseError { error })
   }

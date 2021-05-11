@@ -1,32 +1,45 @@
 use crate::models::Language;
 use crate::proto::raid_boss::RaidBoss;
-use std::borrow::Borrow;
 
-pub fn gbf_translator_key() -> String {
-  "gbf:translator:map".into()
-}
+pub const GBF_PREFIX: &str = "gbf";
 
-pub fn gbf_raid_boss_key<T: Borrow<RaidBoss>>(raid_boss: T, lang: Language) -> String {
+pub const PERSISTENCE_KEY_WORD: &str = "persistence";
+
+pub const GBF_TRANSLATOR_KEY: &str = "gbf:translator:map";
+
+pub fn gbf_raid_boss_key(raid_boss: &RaidBoss, lang: Language) -> String {
   let language = match lang {
     Language::English => "en",
-    Language::Japanese => "jp"
+    Language::Japanese => "jp",
   };
   format!(
-    "gbf:{}:{}.{}",
+    "{}:{}:{}.{}",
+    GBF_PREFIX,
     language,
-    raid_boss.borrow().get_level(),
-    raid_boss.borrow().get_boss_name()
+    raid_boss.get_level(),
+    raid_boss.get_boss_name()
   )
 }
 
-pub fn gbf_get_possible_boss_name<T: Borrow<RaidBoss>>(raid_boss: T, lang: Language) -> String {
+pub fn gbf_persistence_raid_tweet_key<S: Into<String>>(raid_boss_name: S, lang: Language, tweet_id: u64) -> String {
   let language = match lang {
     Language::English => "en",
-    Language::Japanese => "jp"
+    Language::Japanese => "jp",
   };
-  format!("gbf:{}:{}.*", language, raid_boss.borrow().get_level(),)
+  format!(
+    "{}:{}:{}.{}.{}",
+    GBF_PREFIX,
+    PERSISTENCE_KEY_WORD,
+    language,
+    raid_boss_name.into(),
+    tweet_id
+  )
 }
 
-pub fn gbf_raid_boss_keys<T: Borrow<RaidBoss>>(raid_boss: T) -> String {
-  format!("gbf:{}", raid_boss.borrow().get_level())
+pub fn gbf_get_possible_boss_name(raid_boss: &RaidBoss, lang: Language) -> String {
+  let language = match lang {
+    Language::English => "en",
+    Language::Japanese => "jp",
+  };
+  format!("{}:{}:{}.*", GBF_PREFIX, language, raid_boss.get_level(),)
 }
