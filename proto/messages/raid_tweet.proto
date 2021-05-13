@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+package raid_finder.messages;
+
 message RaidTweet {
   uint64 tweet_id = 1;
   string screen_name = 2;

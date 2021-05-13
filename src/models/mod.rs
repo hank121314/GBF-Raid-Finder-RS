@@ -12,6 +12,15 @@ impl std::fmt::Display for Language {
   }
 }
 
+impl Language {
+  pub fn opposite(&self) -> Self {
+    match self {
+      Language::English => Language::Japanese,
+      Language::Japanese => Language::English,
+    }
+  }
+}
+
 impl std::str::FromStr for Language {
   type Err = ();
 

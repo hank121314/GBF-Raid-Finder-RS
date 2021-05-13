@@ -1,4 +1,5 @@
 use snafu::Snafu;
+use tonic::{Status, Code};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -60,9 +61,9 @@ pub enum Error {
   #[snafu(display("JSON parse error, error: {}", error))]
   JSONParseError { error: serde_json::Error },
   #[snafu(display("Protobuf parse error, error: {}", error))]
-  ProtobufParseError { error: protobuf::ProtobufError },
+  ProtobufParseError { error: prost::DecodeError },
   #[snafu(display("Protobuf write to bytes parse error, error: {}", error))]
-  ProtobufWriteError { error: protobuf::ProtobufError },
+  ProtobufWriteError { error: prost::EncodeError },
   #[snafu(display("Cannot parse HashMap to String, error: {}", error))]
   CannotParseHashMapError { error: serde_json::Error },
   #[snafu(display("Cannot parse u32 to usize"))]
@@ -71,6 +72,10 @@ pub enum Error {
   /// Logger Error
   #[snafu(display("Can not create logger"))]
   CannotCreateLogger,
+
+  /// GRPC Error
+  #[snafu(display("Cannot start gRPC server, error: {}", error))]
+  CannotStartGRPCServer { error: tonic::transport::Error },
 
   /// Common Error
   #[snafu(display("Tokio runtime error"))]
@@ -84,3 +89,19 @@ pub enum Error {
   #[snafu(display("Future already complete without streaming"))]
   FutureAlreadyCompleted,
 }
+
+pub enum GrpcError {
+  CannotGetRedisKeysError,
+  CannotMGetRedisError
+}
+
+impl GrpcError {
+  pub fn new(&self) -> Status {
+    match self {
+      GrpcError::CannotGetRedisKeysError => Status::new( Code::Internal, "Cannot get redis keys."),
+      GrpcError::CannotMGetRedisError => Status::new( Code::Internal, "Cannot mget redis values."),
+    }
+  }
+}
+
+

@@ -1,13 +1,13 @@
 use crate::{error, Result};
 
-use crate::proto::raid_boss::RaidBoss;
+use crate::proto::raid_boss_raw::RaidBossRaw;
 use dssim::{Dssim, DssimImage, ToRGBAPLU};
 use imgref::Img;
 use load_image::ImageData;
 
 pub struct Comparison {
-  origin: RaidBoss,
-  matchers: Vec<RaidBoss>,
+  origin: RaidBossRaw,
+  matchers: Vec<RaidBossRaw>,
   context: Dssim,
 }
 
@@ -23,19 +23,19 @@ impl Comparison {
   /// # Examples
   ///
   /// ```
-  /// let origin = RaidBoss::with_args(
+  /// let origin = RaidBossRaw::with_args(
   ///   "アーカーシャ",
   ///   200,
   ///   r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
   ///   Language::Japanese,
   /// );
-  /// let possible_1 = RaidBoss::with_args(
+  /// let possible_1 = RaidBossRaw::with_args(
   ///   "Akasha",
   ///   200,
   ///   r"https://pbs.twimg.com/media/DumtOgzUYAA_GD3.jpg",
   ///   Language::English,
   /// );
-  /// let possible_2 = RaidBoss::with_args(
+  /// let possible_2 = RaidBossRaw::with_args(
   ///   "Wilnas",
   ///   200,
   ///   r"https://pbs.twimg.com/media/Ed52ry_U0AARvyI.jpg",
@@ -45,9 +45,9 @@ impl Comparison {
   /// let result = comparison.compare().await.unwrap();
   /// assert_eq!("Akasha", result.unwrap().get_boss_name()); // => "Akasha"
   /// ```
-  pub fn new<V>(origin: RaidBoss, matchers: V) -> Self
+  pub fn new<V>(origin: RaidBossRaw, matchers: V) -> Self
   where
-    V: IntoIterator<Item = RaidBoss>,
+    V: IntoIterator<Item = RaidBossRaw>,
   {
     Self {
       origin,
@@ -56,7 +56,7 @@ impl Comparison {
     }
   }
 
-  pub async fn compare(&self) -> Result<Option<RaidBoss>> {
+  pub async fn compare(&self) -> Result<Option<RaidBossRaw>> {
     let origin = self.get_image_from_url(self.origin.get_image()).await?;
 
     for matcher in self.matchers.clone() {
@@ -139,23 +139,23 @@ impl Comparison {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{models::Language, proto::raid_boss::RaidBoss};
+  use crate::{models::Language, proto::raid_boss_raw::RaidBoss};
 
   #[tokio::test]
   async fn translate_akasha_name() {
-    let origin = RaidBoss::with_args(
+    let origin = RaidBossRaw::with_args(
       "Lv200 アーカーシャ",
       200,
       r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
       Language::Japanese,
     );
-    let possible_1 = RaidBoss::with_args(
+    let possible_1 = RaidBossRaw::with_args(
       "Lvl 200 Wilnas",
       200,
       r"https://pbs.twimg.com/media/Ed52ry_U0AARvyI.jpg",
       Language::English,
     );
-    let possible_2 = RaidBoss::with_args(
+    let possible_2 = RaidBossRaw::with_args(
       "Lvl 200 Akasha",
       200,
       r"https://pbs.twimg.com/media/DumtOgzUYAA_GD3.jpg",
@@ -168,19 +168,19 @@ mod tests {
 
   #[tokio::test]
   async fn translate_medusa_hl_name() {
-    let origin = RaidBoss::with_args(
+    let origin = RaidBossRaw::with_args(
       "Lv120 メドゥーサ",
       120,
       r"https://pbs.twimg.com/media/CYBki-CUkAQVWW_.jpg",
       Language::Japanese,
     );
-    let possible_1 = RaidBoss::with_args(
+    let possible_1 = RaidBossRaw::with_args(
       "Lvl 120 Medusa",
       120,
       r"https://pbs.twimg.com/media/CfqZlIcVIAAp8e_.jpg",
       Language::English,
     );
-    let possible_2 = RaidBoss::with_args(
+    let possible_2 = RaidBossRaw::with_args(
       "Lvl 120 Metatron",
       120,
       r"https://pbs.twimg.com/media/DZVlpmXU8AEbF6G.jpg",

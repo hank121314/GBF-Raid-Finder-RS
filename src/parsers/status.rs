@@ -1,6 +1,6 @@
 use crate::{
   models::{Language, Tweet},
-  proto::{raid_boss::RaidBoss, raid_tweet::RaidTweet},
+  proto::{raid_boss_raw::RaidBossRaw, raid_tweet::RaidTweet},
 };
 
 use lazy_static::lazy_static;
@@ -19,7 +19,7 @@ lazy_static! {
 pub struct StatusParser {}
 
 impl StatusParser {
-  pub fn parse(tweet: Tweet) -> Option<(RaidBoss, RaidTweet)> {
+  pub fn parse(tweet: Tweet) -> Option<(RaidBossRaw, RaidTweet)> {
     if let Some(jp_raid) = JPRAID_REGEX.captures(&tweet.text) {
       return Self::match_raid(jp_raid, &tweet, Language::Japanese);
     };
@@ -40,10 +40,10 @@ impl StatusParser {
     None
   }
 
-  fn match_raid(raid_cap: Captures, tweet: &Tweet, language: Language) -> Option<(RaidBoss, RaidTweet)> {
+  fn match_raid(raid_cap: Captures, tweet: &Tweet, language: Language) -> Option<(RaidBossRaw, RaidTweet)> {
     let boss_name = raid_cap["boss"].to_owned();
     let mut level = 0;
-    let mut raid_boss = RaidBoss::new();
+    let mut raid_boss = RaidBossRaw::new();
     if let Some(boss_cap) = BOSS_REGEX.captures(&raid_cap["boss"]) {
       level = boss_cap["level"].parse::<i32>().unwrap_or(0);
     }

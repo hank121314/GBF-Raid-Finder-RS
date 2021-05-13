@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package raid_finder.messages;
+
+message RaidBoss {
+  string en_name = 1;
+  string jp_name = 2;
+  int32 level = 3;
+  string image = 4;
+}

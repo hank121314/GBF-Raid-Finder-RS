@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package raid_finder.service;
+
+import "raid_tweet.proto";
+import "raid_boss.proto";
+
+service RaidFinder {
+  rpc get_bosses(GetBossRequest) returns (GetBossResponse);
+  rpc get_persistence_boss(GetPersistenceBossRequest) returns(GetPersistenceBossResponse);
+  rpc start_stream(StreamRequest) returns (stream messages.RaidTweet);
+}
+
+message GetBossRequest {uint32 level = 1;}
+
+message GetPersistenceBossRequest {string boss_name = 1;}
+
+message GetPersistenceBossResponse {repeated messages.RaidTweet tweets = 1;};
+
+message GetBossResponse {
+  repeated messages.RaidBoss bosses = 1;
+}
+
+message StreamRequest {repeated string boss_names = 1;}
