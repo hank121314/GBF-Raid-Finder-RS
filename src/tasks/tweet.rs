@@ -1,17 +1,17 @@
 use crate::proto::raid_tweet::RaidTweet;
 use crate::{
-  client::redis::Redis,
+  client::{filter_stream::StreamingSource, redis::Redis},
   common::redis::{gbf_persistence_raid_tweet_key, gbf_raid_boss_raw_key},
   error,
-  models::{Language, Tweet},
+  models::Tweet,
   parsers::status::StatusParser,
   proto::raid_boss_raw::RaidBossRaw,
-  tasks::translator,
   resources::{BOSS_EXPIRE_IN_30_DAYS_TTL, GRANBLUE_FANTASY_SOURCE, TWEET_PERSISTENCE_ONLY_2_HOURS_TTL},
+  tasks::translator,
   Result,
 };
-use log::{error, info, debug};
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use log::{debug, error, info};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
 enum TweetActorMessage {
@@ -49,15 +49,14 @@ impl TweetActor {
       TweetActorMessage::ParseTweet { tweet, respond_to } => match tweet.source.as_str() {
         // Only process tweet from granblue fantasy source
         GRANBLUE_FANTASY_SOURCE => {
-          if let Some((raid_boss, raid_tweet)) = StatusParser::parse(tweet) {
-            let language = Language::from_str(raid_boss.get_language()).unwrap();
-            let redis_key = gbf_raid_boss_raw_key(&raid_boss, language);
+          if let Some((raid_bow_raw, raid_tweet)) = StatusParser::parse(tweet) {
+            let redis_key = gbf_raid_boss_raw_key(&raid_bow_raw);
             // Each boss will only have 30 days ttl
             self
               .redis
-              .set_protobuf(&redis_key, raid_boss.clone(), BOSS_EXPIRE_IN_30_DAYS_TTL)
+              .set_protobuf(&redis_key, raid_bow_raw.clone(), BOSS_EXPIRE_IN_30_DAYS_TTL)
               .await?;
-            let _ = respond_to.send(Some((raid_boss, raid_tweet)));
+            let _ = respond_to.send(Some((raid_bow_raw, raid_tweet)));
           }
 
           Ok(())

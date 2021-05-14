@@ -10,25 +10,24 @@ mod proto;
 mod resources;
 mod tasks;
 
-use crate::proto::raid_finder::raid_finder_server::RaidFinderServer;
-use crate::tasks::g_rpc::StreamingService;
 use crate::{
   client::redis::Redis,
   client::{filter_stream::StreamingSource, http::FilterStreamClient},
   common::redis::{get_translator_map, GBF_TRANSLATOR_KEY},
   config::Config,
-  error::Error,
   models::{Language, Tweet},
+  proto::raid_finder::raid_finder_server::RaidFinderServer,
   resources::STREAM_URL,
+  tasks::g_rpc::StreamingService,
 };
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use futures_retry::{FutureRetry, RetryPolicy};
 use log::{error as log_error, info};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tasks::tweet::TweetActorHandle;
 use tonic::transport::Server;
 
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub type Result<T, E = error::Error> = std::result::Result<T, E>;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 pub async fn main() -> Result<()> {
@@ -50,20 +49,17 @@ pub async fn main() -> Result<()> {
 
   let service_redis = redis.clone();
 
-  let search_keys = format!("{}:*", GBF_TRANSLATOR_KEY);
-
-  let mut map = get_translator_map(&redis, search_keys)
+  // Initialize translator map with redis keys `gbf:translator:*`
+  let map = get_translator_map(&redis, format!("{}:*", GBF_TRANSLATOR_KEY))
     .await
     .unwrap_or_else(|_| HashMap::new());
 
-  let replace = format!("{}:", GBF_TRANSLATOR_KEY);
-
-  map = map.into_iter().map(|k| (k.0.replace(&replace, ""), k.1)).collect();
-
   let tweet_handler = Arc::new(TweetActorHandle::new(redis, map));
 
+  // Sender between `StreamingSource` and gRPC Server
   let (tweet_sender, tweet_receiver) = crossbeam_channel::bounded(1024);
 
+  // Create gRPC server
   tokio::spawn(async move {
     let service = StreamingService::new(service_redis, tweet_receiver);
     let addr = "0.0.0.0:50052".parse().unwrap();
@@ -81,53 +77,71 @@ pub async fn main() -> Result<()> {
 
   FutureRetry::new(
     || async {
-      let mut stream: StreamingSource<Tweet> = filter_stream_client.oauth_stream(STREAM_URL).await?;
-      while let Some(data) = stream.next().await {
-        let tweet = data?;
-        let (raid_boss, mut raid_tweet) = match tweet_handler.parse_tweet(tweet).await? {
-          Some((b, t)) => (b, t),
-          None => continue,
-        };
-        let boss_name: String = raid_boss.get_boss_name().into();
-        let language = Language::from_str(raid_boss.get_language()).unwrap();
-        let translated_boss_name = match tweet_handler.translate_boss_name(raid_boss).await? {
-          Some(t) => t,
-          None => continue,
-        };
-        // We can infer from empty translated_boss_name that the task is pending
-        match translated_boss_name.is_empty() {
-          true => {
-            info!("Translating task of {} is pending...", boss_name);
+      let stream: StreamingSource<Tweet> = filter_stream_client.oauth_stream(STREAM_URL).await?;
+
+      let tweet_stream = stream
+        .and_then(|tweet| async {
+          match tweet_handler.parse_tweet(tweet.clone()).await? {
+            Some(boss_and_tweet) => Ok(boss_and_tweet),
+            None => Err(error::Error::CannotParseTweet { tweet }),
           }
-          false => {
-            if language == Language::English {
-              raid_tweet.set_boss_name(translated_boss_name);
+        })
+        .and_then(|(raid_boss_raw, raid_tweet)| async {
+          match tweet_handler.translate_boss_name(raid_boss_raw.clone()).await? {
+            Some(translated_name) => Ok((raid_boss_raw, raid_tweet, translated_name)),
+            None => Err(error::Error::CannotTranslateError {
+              name: raid_boss_raw.boss_name,
+            }),
+          }
+        })
+        .and_then(|(raid_boss_raw, mut raid_tweet, translated_name)| async {
+          match translated_name.is_empty() {
+            true => {
+              info!("Translating task of {} is pending...", raid_boss_raw.get_boss_name());
+              Err(error::Error::CannotTranslateError {
+                name: raid_boss_raw.boss_name,
+              })
             }
-            tweet_sender
-              .send(raid_tweet.clone())
-              .map_err(|_| error::Error::SenderSendError)?;
-            tweet_handler.persist_raid_tweet(raid_tweet).await;
+            false => {
+              let language = Language::from_str(raid_boss_raw.get_language()).unwrap();
+              if language == Language::English {
+                raid_tweet.set_boss_name(translated_name);
+              }
+
+              tweet_handler.persist_raid_tweet(raid_tweet.clone()).await;
+
+              Ok(raid_tweet)
+            }
           }
+        });
+
+      tokio::pin!(tweet_stream);
+
+      while let Some(chunk) = tweet_stream.next().await {
+        let raid_tweet = match chunk {
+          Ok(tweet) => tweet,
+          Err(_) => continue,
         };
+        tweet_sender
+          .send(raid_tweet.clone())
+          .map_err(|_| error::Error::SenderSendError)?;
       }
 
-      Ok::<(), Error>(())
+      Err::<(), error::Error>(error::Error::StreamEOFError)
     },
-    |e: error::Error| {
-      return match e {
-        error::Error::StreamEOFError => {
-          info!("Get EOF in twitter stream api will restart in 5 second.");
-          RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
-        }
-        error::Error::JSONParseError { error: _ } => {
-          info!("JSON Parse error by given string, stream might be cut off. Will restart stream in 5 second.");
-          RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
-        }
-        _ => {
-          log_error!("Some error encounter, error: {:?}", e);
-          RetryPolicy::ForwardError(e)
-        }
-      };
+    |e: error::Error| match e {
+      error::Error::StreamEOFError => {
+        info!("Get EOF in twitter stream api will restart in 5 second.");
+        RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
+      }
+      error::Error::JSONParseError { error: _ } => {
+        info!("JSON Parse error by given string, stream might be cut off. Will restart stream in 5 second.");
+        RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
+      }
+      _ => {
+        log_error!("Some error encounter, error: {:?}", e);
+        RetryPolicy::ForwardError(e)
+      }
     },
   )
   .await
