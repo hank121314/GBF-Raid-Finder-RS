@@ -41,13 +41,17 @@ impl Redis {
     V: IntoIterator<Item = S>,
     T: prost::Message + std::default::Default,
   {
+    let redis_keys = keys.into_iter().map(|key| key.into()).collect::<Vec<String>>();
+
+    if redis_keys.is_empty() {
+      return Ok(vec![]);
+    }
+
     let mut connection = self
       .client
       .get_tokio_connection()
       .await
       .map_err(|error| error::Error::RedisGetConnectionError { error })?;
-
-    let redis_keys = keys.into_iter().map(|key| key.into()).collect::<Vec<String>>();
 
     let bytes: Vec<Vec<u8>> = connection
       .get(redis_keys)
