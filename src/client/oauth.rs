@@ -60,7 +60,8 @@ pub struct OAuthRequestBuilder {
   pub query: Vec<Parameter>,
 }
 
-impl OAuthRequestBuilder {
+impl OAuthRequestBuilder
+{
   pub fn new<S1, S2, I: IntoIterator<Item = Parameter>>(
     url: S1,
     method: S2,

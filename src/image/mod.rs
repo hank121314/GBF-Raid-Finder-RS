@@ -7,7 +7,7 @@ use load_image::ImageData;
 
 pub struct Comparison {
   origin: RaidBossRaw,
-  matchers: Vec<RaidBossRaw>,
+  competitors: Vec<RaidBossRaw>,
   context: Dssim,
 }
 
@@ -16,9 +16,18 @@ impl Comparison {
   ///
   /// Given an origin image and bunch of contestants
   ///
+  /// # Specification
+  /// 1. Get origin image from the given url.
+  /// 2. Get all competitors image from its url.
+  /// 3. Use Dssim algorithm to check whether the origin image is same as the competitor image.
+  /// 4. If the result of Dssim algorithm is lower than 0.3 (lower is better) it show that competitor is almost same as origin.
+  ///
+  /// * Most of return values from Dssim algorithm will approach zero, except  Lv120 メドゥーサ and Lvl 120 Medusa.
+  ///   The result of  Lvl 120 Medusa will be 0.2xxxxxxx, so I choose 0.3 for insurance purposes.
+  ///
   /// # Arguments
   /// * `origin`: origin raid boss that you want to pair with matchers.
-  /// * `matchers`: bunch of contestants may match the origin image.
+  /// * `competitors`: bunch of contestants may match the origin image.
   ///
   /// # Examples
   ///
@@ -45,13 +54,13 @@ impl Comparison {
   /// let result = comparison.compare().await.unwrap();
   /// assert_eq!("Akasha", result.unwrap().get_boss_name()); // => "Akasha"
   /// ```
-  pub fn new<V>(origin: RaidBossRaw, matchers: V) -> Self
+  pub fn new<V>(origin: RaidBossRaw, competitors: V) -> Self
   where
     V: IntoIterator<Item = RaidBossRaw>,
   {
     Self {
       origin,
-      matchers: matchers.into_iter().collect::<Vec<_>>(),
+      competitors: competitors.into_iter().collect::<Vec<_>>(),
       context: Dssim::new(),
     }
   }
@@ -59,11 +68,11 @@ impl Comparison {
   pub async fn compare(&self) -> Result<Option<RaidBossRaw>> {
     let origin = self.get_image_from_url(self.origin.get_image()).await?;
 
-    for matcher in self.matchers.clone() {
-      let modified = self.get_image_from_url(matcher.get_image()).await?;
+    for competitor in self.competitors.clone() {
+      let modified = self.get_image_from_url(competitor.get_image()).await?;
       let comparison = self.context.compare(&origin, &modified);
       if comparison.0 < 0.3 {
-        return Ok(Some(matcher));
+        return Ok(Some(competitor));
       }
     }
 
@@ -139,7 +148,7 @@ impl Comparison {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{models::Language, proto::raid_boss_raw::RaidBoss};
+  use crate::{models::Language, proto::raid_boss_raw::RaidBossRaw};
 
   #[tokio::test]
   async fn translate_akasha_name() {

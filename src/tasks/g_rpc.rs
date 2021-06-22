@@ -1,6 +1,6 @@
 use crate::{
   client::redis::Redis,
-  common::redis::{gbf_persistence_raid_tweets_key, gbf_raid_boss_keys},
+  common::redis::{gbf_persistence_raid_tweets_keys, gbf_raid_boss_keys},
   error,
   proto::{
     raid_boss::RaidBoss,
@@ -58,7 +58,7 @@ impl RaidFinder for StreamingService {
     let boss_name = req.boss_name;
     let persistence_keys = self
       .redis
-      .keys(gbf_persistence_raid_tweets_key(boss_name))
+      .keys(gbf_persistence_raid_tweets_keys(boss_name))
       .await
       .map_err(|_| error::GrpcError::CannotGetRedisKeysError.new())?;
     let tweets: Vec<RaidTweet> = self
@@ -76,7 +76,7 @@ impl RaidFinder for StreamingService {
 
   async fn start_stream(&self, request: Request<StreamRequest>) -> Result<Response<Self::StartStreamStream>, Status> {
     let req = request.into_inner();
-    let (tx, rx) = mpsc::channel(4);
+    let (tx, rx) = mpsc::channel(1024);
     let receiver = self.receiver.clone();
     let bosses = req.boss_names;
 

@@ -16,7 +16,7 @@ lazy_static! {
   static ref BOSS_REGEX: Regex = Regex::new("Lv(?:l )?(?P<level>[0-9]+) (?P<boss_name>.*)").unwrap();
 }
 
-pub struct StatusParser {}
+pub struct StatusParser;
 
 impl StatusParser {
   pub fn parse(tweet: Tweet) -> Option<(RaidBossRaw, RaidTweet)> {

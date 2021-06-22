@@ -1,3 +1,7 @@
+use crate::resources::{
+  redis::{BOSS_KEY_WORD, GBF_PREFIX, GBF_TRANSLATOR_KEY, PERSISTENCE_KEY_WORD},
+  SHORTHAND_ENGLISH, SHORTHAND_JAPANESE,
+};
 use crate::{
   client::redis::Redis,
   models::Language,
@@ -5,14 +9,6 @@ use crate::{
   Result,
 };
 use std::{collections::HashMap, str::FromStr};
-
-pub const GBF_PREFIX: &str = "gbf";
-
-pub const BOSS_KEY_WORD: &str = "boss";
-
-pub const PERSISTENCE_KEY_WORD: &str = "persistence";
-
-pub const GBF_TRANSLATOR_KEY: &str = "gbf:translator";
 
 /// Get raw boss redis value with its instance
 ///
@@ -34,8 +30,8 @@ pub const GBF_TRANSLATOR_KEY: &str = "gbf:translator";
 /// ```
 pub fn gbf_raid_boss_raw_key(raid_boss_raw: &RaidBossRaw) -> String {
   let language = match Language::from_str(raid_boss_raw.get_language()).unwrap() {
-    Language::Japanese => "jp",
-    Language::English => "en",
+    Language::Japanese => SHORTHAND_JAPANESE,
+    Language::English => SHORTHAND_ENGLISH,
   };
 
   format!(
@@ -47,6 +43,18 @@ pub fn gbf_raid_boss_raw_key(raid_boss_raw: &RaidBossRaw) -> String {
   )
 }
 
+/// Get translated boss list with level
+///
+/// # Arguments
+///
+/// * `level` - level filter
+///
+/// # Example
+///
+/// ```
+/// let key = gbf_raid_boss_keys(200);
+/// assert_eq!("gbf:boss:200.*", key);
+/// ```
 pub fn gbf_raid_boss_keys(level: u32) -> String {
   let level_match = match level {
     0 => "*".to_owned(),
@@ -56,14 +64,74 @@ pub fn gbf_raid_boss_keys(level: u32) -> String {
   format!("{}:{}:{}.*", GBF_PREFIX, BOSS_KEY_WORD, level_match)
 }
 
-pub fn gbf_raid_boss_key(name: &str, raid_boss: &RaidBoss) -> String {
-  format!("{}:{}:{}.{}", GBF_PREFIX, BOSS_KEY_WORD, raid_boss.level, name)
+/// Get translated boss list with its level and language
+///
+/// # Arguments
+///
+/// * `lang`: Language we want to take
+/// * `raid_boss`: Raid boss information
+///
+///
+/// # Example:
+///
+/// ```
+/// let raid_boss = RaidBoss::with_args(
+///   "Lvl 200 Akasha",
+///   "Lv200 アーカーシャ",
+///   200,
+///   r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+/// );
+/// let jp_key = gbf_raid_boss_key(Language::Japanese, &raid_boss);
+/// let en_key = gbf_raid_boss_key(Language::English, &raid_boss);
+/// assert_eq!("gbf:boss:200.Lv200 アーカーシャ", jp_key);
+/// assert_eq!("gbf:boss:200.Lvl 200 Akasha", en_key);
+/// ```
+pub fn gbf_raid_boss_key(lang: Language, raid_boss: &RaidBoss) -> String {
+  match lang {
+    Language::English => {
+      format!(
+        "{}:{}:{}.{}",
+        GBF_PREFIX, BOSS_KEY_WORD, raid_boss.level, raid_boss.en_name
+      )
+    }
+    Language::Japanese => {
+      format!(
+        "{}:{}:{}.{}",
+        GBF_PREFIX, BOSS_KEY_WORD, raid_boss.level, raid_boss.jp_name
+      )
+    }
+  }
 }
 
-pub fn gbf_persistence_raid_tweets_key<S: Into<String>>(raid_boss_name: S) -> String {
-  format!("{}:{}:{}.*", GBF_PREFIX, PERSISTENCE_KEY_WORD, raid_boss_name.into(),)
+/// Get persistence tweets by raid boss name
+///
+/// # Arguments
+///
+/// * `raid_boss_name`: The name which we want to retrieve from persistence
+///
+/// # Example
+///
+/// ```
+/// let keys = gbf_persistence_raid_tweets_keys("Lv200 アーカーシャ");
+/// assert_eq!("gbf:persistence:Lv200 アーカーシャ.*", keys);
+/// ```
+pub fn gbf_persistence_raid_tweets_keys<S: Into<String>>(raid_boss_name: S) -> String {
+  format!("{}:{}:{}.*", GBF_PREFIX, PERSISTENCE_KEY_WORD, raid_boss_name.into())
 }
 
+/// Get specific persistence tweet by raid boss name and tweet_id
+///
+/// # Arguments
+///
+/// * `raid_boss_name`: The name which we want to retrieve from persistence
+/// * `tweet_id`: specific tweet id
+///
+/// # Example
+///
+/// ```
+/// let key = gbf_persistence_raid_tweet_key("Lv200 アーカーシャ", 1234567890);
+/// assert_eq!("gbf:persistence:Lv200 アーカーシャ.1234567890", key);
+/// ```
 pub fn gbf_persistence_raid_tweet_key<S: Into<String>>(raid_boss_name: S, tweet_id: u64) -> String {
   format!(
     "{}:{}:{}.{}",
@@ -74,16 +142,37 @@ pub fn gbf_persistence_raid_tweet_key<S: Into<String>>(raid_boss_name: S, tweet_
   )
 }
 
+/// Get bosses which are at the same level with given raid_boss_raw.
+///
+/// # Arguments
+///
+/// * `raid_boss_name`: The raid boss which we want to match its level.
+/// * `lang`: The language of keys we want to retrieve.
+///
+/// # Example
+///
+/// ```
+/// let raid_boss_raw = RaidBossRaw::with_args(
+///   "Lv200 アーカーシャ",
+///   200,
+///   r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+///   Language::Japanese,
+/// );
+/// let jp_key = gbf_get_possible_boss_name(&raid_boss_raw, Language::Japanese);
+/// let en_key = gbf_get_possible_boss_name(&raid_boss_raw, Language::English);
+/// assert_eq!("gbf:jp:200.*", jp_key);
+/// assert_eq!("gbf:en:200.*", en_key);
+/// ```
 pub fn gbf_get_possible_boss_name(raid_boss_raw: &RaidBossRaw, lang: Language) -> String {
   let language = match lang {
-    Language::English => "en",
-    Language::Japanese => "jp",
+    Language::English => SHORTHAND_ENGLISH,
+    Language::Japanese => SHORTHAND_JAPANESE,
   };
   format!("{}:{}:{}.*", GBF_PREFIX, language, raid_boss_raw.level)
 }
 
-pub async fn get_translator_map<S: Into<String>>(redis: &Redis, keys: S) -> Result<HashMap<String, String>> {
-  let redis_keys = redis.keys(keys).await?;
+pub async fn get_translator_map(redis: &Redis) -> Result<HashMap<String, String>> {
+  let redis_keys = redis.keys(format!("{}:*", GBF_TRANSLATOR_KEY)).await?;
   let redis_values = redis.mget_string(redis_keys.clone()).await?;
   let replace = format!("{}:", GBF_TRANSLATOR_KEY);
 
@@ -94,4 +183,69 @@ pub async fn get_translator_map<S: Into<String>>(redis: &Redis, keys: S) -> Resu
       .map(|k| (k.1.replace(&replace, ""), redis_values[k.0].clone()))
       .collect(),
   )
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_gbf_raid_boss_raw_key() {
+    let raid_boss_raw = RaidBossRaw::with_args(
+      "Lv200 アーカーシャ",
+      200,
+      r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+      Language::Japanese,
+    );
+    let key = gbf_raid_boss_raw_key(&raid_boss_raw);
+    assert_eq!("gbf:jp:200.Lv200 アーカーシャ", key);
+  }
+
+  #[test]
+  fn test_gbf_raid_boss_keys() {
+    let key = gbf_raid_boss_keys(200);
+    assert_eq!("gbf:boss:200.*", key);
+    let key = gbf_raid_boss_keys(0);
+    assert_eq!("gbf:boss:*.*", key);
+  }
+
+  #[test]
+  fn test_gbf_raid_boss_key() {
+    let raid_boss = RaidBoss::with_args(
+      "Lvl 200 Akasha",
+      "Lv200 アーカーシャ",
+      200,
+      r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+    );
+    let jp_key = gbf_raid_boss_key(Language::Japanese, &raid_boss);
+    let en_key = gbf_raid_boss_key(Language::English, &raid_boss);
+    assert_eq!("gbf:boss:200.Lv200 アーカーシャ", jp_key);
+    assert_eq!("gbf:boss:200.Lvl 200 Akasha", en_key);
+  }
+
+  #[test]
+  fn test_gbf_persistence_raid_tweets_keys() {
+    let keys = gbf_persistence_raid_tweets_keys("Lv200 アーカーシャ");
+    assert_eq!("gbf:persistence:Lv200 アーカーシャ.*", keys);
+  }
+
+  #[test]
+  fn test_gbf_persistence_raid_tweet_key() {
+    let key = gbf_persistence_raid_tweet_key("Lv200 アーカーシャ", 1234567890);
+    assert_eq!("gbf:persistence:Lv200 アーカーシャ.1234567890", key);
+  }
+
+  #[test]
+  fn test_gbf_get_possible_boss_name() {
+    let raid_boss_raw = RaidBossRaw::with_args(
+      "Lv200 アーカーシャ",
+      200,
+      r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+      Language::Japanese,
+    );
+    let jp_key = gbf_get_possible_boss_name(&raid_boss_raw, Language::Japanese);
+    let en_key = gbf_get_possible_boss_name(&raid_boss_raw, Language::English);
+    assert_eq!("gbf:jp:200.*", jp_key);
+    assert_eq!("gbf:en:200.*", en_key);
+  }
 }

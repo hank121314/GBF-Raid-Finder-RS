@@ -1,9 +1,26 @@
+use crate::resources::{SHORTHAND_ENGLISH, SHORTHAND_JAPANESE};
 use serde::{Deserialize, Serialize};
+use std::fmt::Formatter;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Language {
   English,
   Japanese,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TranslatorResult {
+  Pending,
+  Success { result: String },
+}
+
+impl std::fmt::Display for TranslatorResult {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      TranslatorResult::Pending => write!(f, "{}", ""),
+      TranslatorResult::Success { result } => write!(f, "{}", result),
+    }
+  }
 }
 
 impl std::fmt::Display for Language {
@@ -27,9 +44,9 @@ impl std::str::FromStr for Language {
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s {
       "Japanese" => Ok(Language::Japanese),
-      "jp" => Ok(Language::Japanese),
+      SHORTHAND_JAPANESE => Ok(Language::Japanese),
       "English" => Ok(Language::English),
-      "en" => Ok(Language::English),
+      SHORTHAND_ENGLISH => Ok(Language::English),
       _ => Err(()),
     }
   }

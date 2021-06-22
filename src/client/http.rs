@@ -5,6 +5,7 @@ use crate::{
     parameter::Parameter,
   },
   config::Config,
+  resources::http::OAUTH_VERSION,
   Result,
 };
 use serde::de::DeserializeOwned;
@@ -52,7 +53,7 @@ impl FilterStreamClient {
   where
     S: Into<String>,
   {
-    let oauth = OAuthParameters::new(self.config.api_key.clone(), self.config.access_token.clone(), "1.0");
+    let oauth = OAuthParameters::new(self.config.api_key.clone(), self.config.access_token.clone(), OAUTH_VERSION);
     let oauth_builder = OAuthRequestBuilder::new(
       url,
       reqwest::Method::POST.as_str(),
