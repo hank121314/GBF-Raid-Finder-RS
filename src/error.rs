@@ -14,6 +14,8 @@ pub enum Error {
   ApiKeyNotFound,
   #[snafu(display("Cannot find environment variable TWITTER_API_SECRET_KEY"))]
   ApiSecretKeyNotFound,
+  #[snafu(display("Cannot find environment variable REDIS_URL"))]
+  RedisURLNotFound,
 
   /// Redis Error
   #[snafu(display("Cannot get redis connection, error: {}", error))]

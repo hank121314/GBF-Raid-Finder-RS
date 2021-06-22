@@ -10,20 +10,21 @@ mod proto;
 mod resources;
 mod tasks;
 
+use crate::models::TranslatorResult;
 use crate::{
   client::redis::Redis,
   client::{filter_stream::StreamingSource, http::FilterStreamClient},
-  common::redis::{get_translator_map, GBF_TRANSLATOR_KEY},
+  common::redis::get_translator_map,
   config::Config,
   models::{Language, Tweet},
   proto::raid_finder::raid_finder_server::RaidFinderServer,
-  resources::STREAM_URL,
+  resources::http::STREAM_URL,
   tasks::g_rpc::StreamingService,
 };
 use futures::{StreamExt, TryStreamExt};
 use futures_retry::{FutureRetry, RetryPolicy};
 use log::{error as log_error, info};
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc, env};
 use tasks::tweet::TweetActorHandle;
 use tonic::transport::Server;
 
@@ -31,7 +32,11 @@ pub type Result<T, E = error::Error> = std::result::Result<T, E>;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 pub async fn main() -> Result<()> {
-  logger::create_logger("/var/log/", "raid-finder-stream", 3)?;
+  let log_path = env::var("GBF_RAID_FINDER_LOG_PATH").unwrap_or_else(|_| "/var/log".to_owned());
+  
+  logger::create_logger(log_path, "raid-finder-stream", 3)?;
+
+  let redis_url = env::var("REDIS_URL").map_err(|_| error::Error::RedisURLNotFound)?;
 
   let config = Config::new()?;
 
@@ -43,18 +48,16 @@ pub async fn main() -> Result<()> {
   );
 
   // Create tweet handler
-  let singleton_redis = Redis::new("redis://127.0.0.1/")?;
+  let singleton_redis = Redis::new(redis_url)?;
 
   let redis = Arc::new(singleton_redis);
 
   let service_redis = redis.clone();
 
   // Initialize translator map with redis keys `gbf:translator:*`
-  let map = get_translator_map(&redis, format!("{}:*", GBF_TRANSLATOR_KEY))
-    .await
-    .unwrap_or_else(|_| HashMap::new());
+  let map = get_translator_map(&redis).await.unwrap_or_else(|_| HashMap::new());
 
-  let tweet_handler = Arc::new(TweetActorHandle::new(redis, map));
+  let tweet_handler = TweetActorHandle::new(redis, map);
 
   // Sender between `StreamingSource` and gRPC Server
   let (tweet_sender, tweet_receiver) = crossbeam_channel::bounded(1024);
@@ -62,7 +65,7 @@ pub async fn main() -> Result<()> {
   // Create gRPC server
   tokio::spawn(async move {
     let service = StreamingService::new(service_redis, tweet_receiver);
-    let addr = "0.0.0.0:50052".parse().unwrap();
+    let addr = "0.0.0.0:50051".parse().unwrap();
 
     info!("gRPC server listening on {}...", addr);
 
@@ -81,45 +84,45 @@ pub async fn main() -> Result<()> {
 
       let tweet_stream = stream
         .and_then(|tweet| async {
-          match tweet_handler.parse_tweet(tweet.clone()).await? {
-            Some(boss_and_tweet) => Ok(boss_and_tweet),
-            None => Err(error::Error::CannotParseTweet { tweet }),
-          }
+          tweet_handler
+            .parse_tweet(tweet.clone())
+            .await
+            .ok_or(error::Error::CannotParseTweet { tweet })
         })
-        .and_then(|(raid_boss_raw, raid_tweet)| async {
-          match tweet_handler.translate_boss_name(raid_boss_raw.clone()).await? {
-            Some(translated_name) => Ok((raid_boss_raw, raid_tweet, translated_name)),
-            None => Err(error::Error::CannotTranslateError {
-              name: raid_boss_raw.boss_name,
-            }),
-          }
-        })
-        .and_then(|(raid_boss_raw, mut raid_tweet, translated_name)| async {
-          match translated_name.is_empty() {
-            true => {
-              info!("Translating task of {} is pending...", raid_boss_raw.get_boss_name());
-              Err(error::Error::CannotTranslateError {
-                name: raid_boss_raw.boss_name,
-              })
-            }
-            false => {
-              let language = Language::from_str(raid_boss_raw.get_language()).unwrap();
-              if language == Language::English {
-                raid_tweet.set_boss_name(translated_name);
+        .and_then(|(raid_boss_raw, mut raid_tweet)| async {
+          tweet_handler
+            .translate_boss_name(raid_boss_raw.clone())
+            .await
+            .and_then(|translator_result| match translator_result {
+              TranslatorResult::Pending => None,
+              TranslatorResult::Success {
+                result: translated_name,
+              } => {
+                let language = Language::from_str(raid_boss_raw.get_language()).unwrap();
+                if language == Language::English {
+                  raid_tweet.set_boss_name(translated_name.to_owned());
+                }
+
+                Some(raid_tweet)
               }
+            })
+            .ok_or(error::Error::CannotTranslateError {
+              name: raid_boss_raw.boss_name,
+            })
+        })
+        .and_then(|raid_tweet| async {
+          tweet_handler.persist_raid_tweet(raid_tweet.clone()).await;
 
-              tweet_handler.persist_raid_tweet(raid_tweet.clone()).await;
-
-              Ok(raid_tweet)
-            }
-          }
+          Ok(raid_tweet)
         });
 
+      // Calls to async fn return anonymous Future values that are !Unpin. These values must be pinned before they can be polled.
       tokio::pin!(tweet_stream);
 
       while let Some(chunk) = tweet_stream.next().await {
         let raid_tweet = match chunk {
           Ok(tweet) => tweet,
+          // If the error occur means this tweet stream failed in and_then combinators.
           Err(_) => continue,
         };
         tweet_sender
@@ -132,10 +135,6 @@ pub async fn main() -> Result<()> {
     |e: error::Error| match e {
       error::Error::StreamEOFError => {
         info!("Get EOF in twitter stream api will restart in 5 second.");
-        RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
-      }
-      error::Error::JSONParseError { error: _ } => {
-        info!("JSON Parse error by given string, stream might be cut off. Will restart stream in 5 second.");
         RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
       }
       _ => {
