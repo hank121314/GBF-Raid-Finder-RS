@@ -98,7 +98,7 @@ pub async fn translator_tasks(
 
   let mut names: (&str, &str) = (translated_name.as_str(), raid_boss_raw.get_boss_name());
   if from_language == Language::English {
-    // The first argument of RaidBoss::with_args will always to en_name, if from_language is english en_name should be its name.
+    // The first argument of RaidBoss::with_args will always be en_name, if from_language is english en_name should be its name.
     names = (raid_boss_raw.get_boss_name(), translated_name.as_str());
   }
 
