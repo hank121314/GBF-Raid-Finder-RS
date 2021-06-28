@@ -1,4 +1,5 @@
-use crate::models::Language;
+use crate::{error, models::Language, Result};
+use ::prost::Message;
 
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RaidTweet {
@@ -215,5 +216,15 @@ impl RaidTweet {
   // Take field
   pub fn take_profile_image(&mut self) -> ::std::string::String {
     ::std::mem::replace(&mut self.profile_image, ::std::string::String::new())
+  }
+
+  pub fn to_bytes(&self) -> Result<Vec<u8>> {
+    let mut bytes: Vec<u8> = Vec::new();
+
+    self
+      .encode(&mut bytes)
+      .map_err(|error| error::Error::ProtobufWriteError { error })?;
+
+    Ok(bytes)
   }
 }
