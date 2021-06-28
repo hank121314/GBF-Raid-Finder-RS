@@ -18,10 +18,10 @@ bytes = "1.0.1"
 tokio = { version = "1.5", features = ["rt", "rt-multi-thread", "macros", "net", "time", "sync"] }
 futures = "0.3"
 futures-retry = "0.6.0"
-# gRPC
-tonic = "0.4.3"
+# http server
 tokio-stream = "0.1.5"
-crossbeam-channel = "0.5.1"
+hyper = "0.14.9"
+warp = "0.3.1"
 # logger
 log = "0.4.14"
 log4rs = "1.0.0"

@@ -8,6 +8,7 @@ mod models;
 mod parsers;
 mod proto;
 mod resources;
+mod server;
 mod tasks;
 
 use crate::models::TranslatorResult;
@@ -17,23 +18,23 @@ use crate::{
   common::redis::get_translator_map,
   config::Config,
   models::{Language, Tweet},
-  proto::raid_finder::raid_finder_server::RaidFinderServer,
   resources::http::STREAM_URL,
-  tasks::g_rpc::StreamingService,
+  server::{client::FinderClient, http::create_http_server},
+  tasks::tweet::TweetActorHandle,
 };
 use futures::{StreamExt, TryStreamExt};
 use futures_retry::{FutureRetry, RetryPolicy};
 use log::{error as log_error, info};
-use std::{collections::HashMap, str::FromStr, sync::Arc, env};
-use tasks::tweet::TweetActorHandle;
-use tonic::transport::Server;
+use std::{collections::HashMap, env, str::FromStr, sync::Arc};
+use tokio::sync::RwLock;
 
+pub type FinderClients = Arc<RwLock<HashMap<String, FinderClient>>>;
 pub type Result<T, E = error::Error> = std::result::Result<T, E>;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 pub async fn main() -> Result<()> {
   let log_path = env::var("GBF_RAID_FINDER_LOG_PATH").unwrap_or_else(|_| "/var/log".to_owned());
-  
+
   logger::create_logger(log_path, "raid-finder-stream", 3)?;
 
   let redis_url = env::var("REDIS_URL").map_err(|_| error::Error::RedisURLNotFound)?;
@@ -59,23 +60,13 @@ pub async fn main() -> Result<()> {
 
   let tweet_handler = TweetActorHandle::new(redis, map);
 
-  // Sender between `StreamingSource` and gRPC Server
-  let (tweet_sender, tweet_receiver) = crossbeam_channel::bounded(1024);
+  let finder_clients: FinderClients = Arc::new(RwLock::new(HashMap::new()));
+
+  let service_clients = finder_clients.clone();
 
   // Create gRPC server
   tokio::spawn(async move {
-    let service = StreamingService::new(service_redis, tweet_receiver);
-    let addr = "0.0.0.0:50051".parse().unwrap();
-
-    info!("gRPC server listening on {}...", addr);
-
-    Server::builder()
-      .add_service(RaidFinderServer::new(service))
-      .serve(addr)
-      .await
-      .map_err(|error| error::Error::CannotStartGRPCServer { error })?;
-
-    Ok::<(), error::Error>(())
+    create_http_server(service_redis, service_clients).await;
   });
 
   FutureRetry::new(
@@ -125,9 +116,20 @@ pub async fn main() -> Result<()> {
           // If the error occur means this tweet stream failed in and_then combinators.
           Err(_) => continue,
         };
-        tweet_sender
-          .send(raid_tweet.clone())
-          .map_err(|_| error::Error::SenderSendError)?;
+
+        let clients = finder_clients.clone();
+
+        tokio::spawn(async move {
+          let readable_clients = clients.read().await;
+          readable_clients.iter().for_each(move |(_, client)| {
+            if client.boss_names.contains(&raid_tweet.boss_name) {
+              if let Ok(bytes) = raid_tweet.to_bytes() {
+                let msg = warp::ws::Message::binary(bytes);
+                let _ = client.sender.send(Ok(msg));
+              }
+            }
+          });
+        });
       }
 
       Err::<(), error::Error>(error::Error::StreamEOFError)
