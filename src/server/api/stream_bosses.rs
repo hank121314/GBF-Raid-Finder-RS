@@ -1,4 +1,5 @@
 use crate::{server::client::FinderClient, server::state::AppState};
+use futures::stream::SplitSink;
 use futures::{FutureExt, StreamExt};
 use log::{error, info};
 use serde::Deserialize;
@@ -11,9 +12,23 @@ pub struct StreamRequest {
 }
 
 pub async fn stream_bosses(ws: warp::ws::WebSocket, app_state: AppState) {
+  // Generate client uuid
   let client_id = nanoid::nanoid!();
+  // Get client transportation
   let (client_tx, mut client_rx) = ws.split();
-  if let Some(result) = client_rx.next().await {
+  // Create a channel between ws and tweet stream
+  let (tx, rx) = mpsc::unbounded_channel();
+  // Create finder client and inset it into global state
+  let client = FinderClient::new([""], tx);
+  app_state.clients.write().await.insert(client_id.clone(), client);
+  info!("Client: {} incoming...", client_id);
+  // Receiver for tweet stream
+  let receiver = UnboundedReceiverStream::new(rx);
+  // Create a new thread to sending message to client
+  sending_message(client_id.clone(), client_tx, receiver, app_state.clone());
+  // Consuming incoming message
+  while let Some(result) = client_rx.next().await {
+    // Once client did not send clarify message, it will disconnect.
     let msg = if let Ok(msg) = result {
       match msg.to_str() {
         Ok(msg) => msg.to_owned(),
@@ -27,19 +42,23 @@ pub async fn stream_bosses(ws: warp::ws::WebSocket, app_state: AppState) {
     };
     if let Ok(request) = serde_json::from_str::<StreamRequest>(msg.as_str()) {
       let mut clients = app_state.clients.write().await;
-      let (tx, rx) = mpsc::unbounded_channel();
-      let client = FinderClient::new(request.boss_names, tx);
-      info!("Client: {} incoming...", client_id);
-      clients.insert(client_id.clone(), client);
-      drop(clients);
-      let receiver = UnboundedReceiverStream::new(rx);
-      tokio::spawn(receiver.forward(client_tx).then(|result| async move {
-        if let Err(_) = result {
-          let mut clients = app_state.clients.write().await;
-          clients.remove(client_id.as_str());
-          info!("Client: {} gone!", client_id);
-        }
-      }));
+      if let Some(client) = clients.get_mut(&client_id) {
+        (*client).boss_names = request.boss_names;
+      }
     }
   }
+}
+
+fn sending_message(
+  client_id: String,
+  client_tx: SplitSink<warp::ws::WebSocket, warp::ws::Message>,
+  receiver: UnboundedReceiverStream<Result<warp::ws::Message, warp::Error>>,
+  app_state: AppState,
+) {
+  tokio::spawn(receiver.forward(client_tx).then(|result| async move {
+    if let Err(_) = result {
+      app_state.clients.write().await.remove(client_id.as_str());
+      info!("Client: {} gone!", client_id);
+    }
+  }));
 }
