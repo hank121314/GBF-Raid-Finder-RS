@@ -35,6 +35,31 @@ impl Redis {
     T::decode(&mut bytes.as_slice()).map_err(|error| error::Error::ProtobufParseError { error })
   }
 
+  pub async fn mget_protobuf_raw<V, S>(&self, keys: V) -> Result<Vec<Vec<u8>>>
+    where
+      S: Into<String>,
+      V: IntoIterator<Item = S>,
+  {
+    let redis_keys = keys.into_iter().map(|key| key.into()).collect::<Vec<String>>();
+
+    if redis_keys.is_empty() {
+      return Ok(vec![]);
+    }
+
+    let mut connection = self
+      .client
+      .get_tokio_connection()
+      .await
+      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+
+    let bytes: Vec<Vec<u8>> = connection
+      .get(redis_keys)
+      .await
+      .map_err(|error| error::Error::RedisGetValueError { error })?;
+
+    Ok(bytes)
+  }
+
   pub async fn mget_protobuf<T, V, S>(&self, keys: V) -> Result<Vec<T>>
   where
     S: Into<String>,
