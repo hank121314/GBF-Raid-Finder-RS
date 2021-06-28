@@ -1,5 +1,4 @@
 use snafu::Snafu;
-use tonic::{Status, Code};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -75,10 +74,6 @@ pub enum Error {
   #[snafu(display("Can not create logger"))]
   CannotCreateLogger,
 
-  /// GRPC Error
-  #[snafu(display("Cannot start gRPC server, error: {}", error))]
-  CannotStartGRPCServer { error: tonic::transport::Error },
-
   /// Common Error
   #[snafu(display("Tokio runtime error"))]
   TokioRuntimeError,
@@ -92,18 +87,33 @@ pub enum Error {
   FutureAlreadyCompleted,
 }
 
-pub enum GrpcError {
-  CannotGetRedisKeysError,
-  CannotMGetRedisError
+#[derive(Debug)]
+struct HttpRejection {
+  message: String,
+  code: u16,
 }
 
-impl GrpcError {
-  pub fn new(&self) -> Status {
-    match self {
-      GrpcError::CannotGetRedisKeysError => Status::new( Code::Internal, "Cannot get redis keys."),
-      GrpcError::CannotMGetRedisError => Status::new( Code::Internal, "Cannot mget redis values."),
+impl HttpRejection {
+  fn new<S: Into<String>>(message: S, code: u16) -> Self {
+    Self {
+      message: message.into(),
+      code,
     }
   }
 }
 
+impl warp::reject::Reject for HttpRejection {}
 
+pub enum HttpError {
+  CannotGetRedisKeysError,
+  CannotMGetRedisError,
+}
+
+impl HttpError {
+  pub fn new(&self) -> warp::reject::Rejection {
+    match self {
+      HttpError::CannotGetRedisKeysError => warp::reject::custom(HttpRejection::new("Cannot get redis keys.", 404)),
+      HttpError::CannotMGetRedisError => warp::reject::custom(HttpRejection::new("Cannot mget redis values.", 404)),
+    }
+  }
+}
