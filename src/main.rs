@@ -11,18 +11,18 @@ mod resources;
 mod server;
 mod tasks;
 
-use crate::models::TranslatorResult;
 use crate::{
   client::redis::Redis,
   client::{filter_stream::StreamingSource, http::FilterStreamClient},
   common::redis::get_translator_map,
   config::Config,
-  models::{Language, Tweet},
+  models::{Language, TranslatorResult, Tweet},
+  proto::{raid_boss_raw::RaidBossRaw, raid_tweet::RaidTweet},
   resources::http::STREAM_URL,
   server::{client::FinderClient, http::create_http_server},
   tasks::tweet::TweetActorHandle,
 };
-use futures::{StreamExt, TryStreamExt};
+use futures::{FutureExt, StreamExt, TryStreamExt};
 use futures_retry::{FutureRetry, RetryPolicy};
 use log::{error as log_error, info};
 use std::{collections::HashMap, env, str::FromStr, sync::Arc};
@@ -80,31 +80,40 @@ pub async fn main() -> Result<()> {
             .await
             .ok_or(error::Error::CannotParseTweet { tweet })
         })
-        .and_then(|(raid_boss_raw, mut raid_tweet)| async {
+        .and_then(|(raid_boss_raw, raid_tweet)| async {
           tweet_handler
             .translate_boss_name(raid_boss_raw.clone())
+            .map(|result| Ok((raid_boss_raw, raid_tweet, result)))
             .await
-            .and_then(|translator_result| match translator_result {
-              TranslatorResult::Pending => None,
-              TranslatorResult::Success {
-                result: translated_name,
-              } => {
-                let language = Language::from_str(raid_boss_raw.get_language()).unwrap();
-                if language == Language::English {
-                  raid_tweet.set_boss_name(translated_name.to_owned());
-                }
-
-                Some(raid_tweet)
-              }
-            })
-            .ok_or(error::Error::CannotTranslateError {
-              name: raid_boss_raw.boss_name,
-            })
         })
+        .and_then(
+          |(raid_boss_raw, mut raid_tweet, translator_result): (RaidBossRaw, RaidTweet, TranslatorResult)| async move {
+            let language = Language::from_str(raid_boss_raw.get_language()).unwrap();
+            match language {
+              // Only English boss name should be converted into Japanese
+              Language::English => match translator_result {
+                TranslatorResult::Pending => None,
+                TranslatorResult::Success {
+                  result: translated_name,
+                } => {
+                  if language == Language::English {
+                    raid_tweet.set_boss_name(translated_name.to_owned());
+                  }
+
+                  Some(raid_tweet)
+                }
+              },
+              Language::Japanese => Some(raid_tweet),
+            }
+            .ok_or(error::Error::CannotTranslateError {
+              name: raid_boss_raw.get_boss_name().into(),
+            })
+          },
+        )
         .and_then(|raid_tweet| async {
           tweet_handler.persist_raid_tweet(raid_tweet.clone()).await;
 
-          Ok(raid_tweet)
+          return Ok(raid_tweet);
         });
 
       // Calls to async fn return anonymous Future values that are !Unpin. These values must be pinned before they can be polled.

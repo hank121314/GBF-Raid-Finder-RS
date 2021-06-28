@@ -24,7 +24,7 @@ enum TweetActorMessage {
   },
   TranslateBossName {
     raid_boss: RaidBossRaw,
-    respond_to: oneshot::Sender<Option<TranslatorResult>>,
+    respond_to: oneshot::Sender<TranslatorResult>,
   },
   PersistRaidTweet {
     raid_tweet: RaidTweet,
@@ -80,12 +80,12 @@ impl TweetActor {
             match translated.is_empty() {
               true => {
                 debug!("Translating task of {} is pending...", raid_boss.get_boss_name());
-                let _ = respond_to.send(Some(TranslatorResult::Pending));
+                let _ = respond_to.send(TranslatorResult::Pending);
               }
               false => {
-                let _ = respond_to.send(Some(TranslatorResult::Success {
+                let _ = respond_to.send(TranslatorResult::Success {
                   result: translated.to_string(),
-                }));
+                });
               }
             };
 
@@ -99,7 +99,7 @@ impl TweetActor {
             writable_map.insert(raid_boss.get_boss_name().into(), "".into());
             drop(writable_map);
             // Response to handler before processing translation tasks.
-            let _ = respond_to.send(None);
+            let _ = respond_to.send(TranslatorResult::Pending);
             debug!("Find new boss {}. Translating...", raid_boss.get_boss_name());
 
             // Prepare for translation task.
@@ -172,7 +172,7 @@ impl TweetActorHandle {
     recv.await.expect("Actor task has been killed")
   }
 
-  pub async fn translate_boss_name(&self, raid_boss_raw: RaidBossRaw) -> Option<TranslatorResult> {
+  pub async fn translate_boss_name(&self, raid_boss_raw: RaidBossRaw) -> TranslatorResult {
     let (send, recv) = oneshot::channel();
     let msg = TweetActorMessage::TranslateBossName {
       raid_boss: raid_boss_raw.clone(),
