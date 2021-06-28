@@ -6,7 +6,7 @@ use crate::{
   resources::redis::{BOSS_EXPIRE_IN_30_DAYS_TTL, GBF_TRANSLATOR_KEY},
   Redis, Result,
 };
-use log::info;
+use log::{info, error};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -84,7 +84,7 @@ pub async fn translator_tasks(
       Some(translated_name.into())
     }
     None => {
-      info!(
+      error!(
         "Cannot translate {}, maybe other language raid_boss is not exist",
         boss_name
       );

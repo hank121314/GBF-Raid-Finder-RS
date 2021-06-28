@@ -13,7 +13,7 @@ use crate::{
   Result,
 };
 
-use log::{debug, error, info};
+use log::{debug, error};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
@@ -100,7 +100,7 @@ impl TweetActor {
             drop(writable_map);
             // Response to handler before processing translation tasks.
             let _ = respond_to.send(None);
-            info!("Find new boss {}. Translating...", raid_boss.get_boss_name());
+            debug!("Find new boss {}. Translating...", raid_boss.get_boss_name());
 
             // Prepare for translation task.
             let map = self.map.clone();
