@@ -22,11 +22,12 @@ use crate::{
   server::{client::FinderClient, http::create_http_server},
   tasks::tweet::TweetActorHandle,
 };
-use futures::{FutureExt, StreamExt, TryStreamExt};
+use futures::{FutureExt, TryStreamExt};
 use futures_retry::{FutureRetry, RetryPolicy};
 use log::{error as log_error, info};
 use std::{collections::HashMap, env, str::FromStr, sync::Arc};
 use tokio::sync::RwLock;
+use tokio_stream::StreamExt;
 
 pub type FinderClients = Arc<RwLock<HashMap<String, FinderClient>>>;
 pub type Result<T, E = error::Error> = std::result::Result<T, E>;
@@ -116,16 +117,18 @@ pub async fn main() -> Result<()> {
           return Ok(raid_tweet);
         });
 
+      let tweet_stream = tweet_stream.timeout(std::time::Duration::new(5, 0));
+
       // Calls to async fn return anonymous Future values that are !Unpin. These values must be pinned before they can be polled.
       tokio::pin!(tweet_stream);
 
-      while let Some(chunk) = tweet_stream.next().await {
+      while let Some(Ok(chunk)) = tweet_stream.next().await {
         let raid_tweet = match chunk {
           Ok(tweet) => tweet,
           // If the error occur means this tweet stream failed in and_then combinators.
           Err(_) => continue,
         };
-
+        info!("Find raid tweet of boss: {}!", raid_tweet.get_boss_name());
         let clients = finder_clients.clone();
 
         tokio::spawn(async move {

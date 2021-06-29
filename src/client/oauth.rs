@@ -7,7 +7,6 @@ use crate::{
 };
 use hmac::{Hmac, Mac, NewMac};
 use http::header::{AUTHORIZATION, CONNECTION, CONTENT_TYPE};
-use isahc::config::Configurable;
 use nanoid::nanoid;
 use sha1::Sha1;
 use std::borrow::Borrow;
@@ -171,7 +170,6 @@ impl OAuthRequestBuilder
 
     if let Ok(method) = self.method.clone().parse::<http::Method>() {
       return builder
-        .low_speed_timeout(128, std::time::Duration::new(5, 0))
         .method(method)
         .uri(host)
         .header(CONNECTION, "close")
