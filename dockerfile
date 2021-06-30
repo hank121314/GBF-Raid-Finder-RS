@@ -16,7 +16,7 @@ RUN cargo build --release
 FROM alpine:3.13.0
 RUN apk update && apk add --no-cache openssl-dev \
   llvm-libunwind \
-  libcurl \
+  libcurl=7.64.1 \
   libgcc
 EXPOSE 50051
 COPY --from=builder /usr/src/raid-finder/target/release/raid-finder raid-finder
