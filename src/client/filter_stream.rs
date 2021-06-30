@@ -58,7 +58,7 @@ where
 
           self.body = Some(res.into_body());
         }
-      };
+      }
     }
 
     if let Some(mut body) = self.body.take() {
@@ -71,9 +71,12 @@ where
           }
           Poll::Ready(Err(_)) => {
             self.body = Some(body);
-            Poll::Ready(Some(Err(error::Error::StreamEOFError)))
+            Poll::Ready(Some(Err(error::Error::StreamUnexpectedError)))
           }
           Poll::Ready(Ok(len)) => {
+            if len == 0 {
+              return Poll::Ready(Some(Err(error::Error::StreamEOFError)));
+            }
             let string = String::from_utf8(buffer[..len].to_owned())
               .map_err(|error| error::Error::StringParseFromBytesError { error })?;
             self.body = Some(body);

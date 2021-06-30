@@ -43,6 +43,8 @@ pub enum Error {
   SenderSendError,
   #[snafu(display("Unexpect EOF."))]
   StreamEOFError,
+  #[snafu(display("Stream get unexpected error."))]
+  StreamUnexpectedError,
   #[snafu(display("IO Error, cannot read response, error: {}", error))]
   IOError { error: std::io::Error },
 

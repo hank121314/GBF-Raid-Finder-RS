@@ -114,7 +114,7 @@ pub async fn main() -> Result<()> {
         .and_then(|raid_tweet| async {
           tweet_handler.persist_raid_tweet(raid_tweet.clone()).await;
 
-          return Ok(raid_tweet);
+          Ok(raid_tweet)
         });
 
       let tweet_stream = tweet_stream.timeout(std::time::Duration::new(5, 0));
@@ -123,33 +123,43 @@ pub async fn main() -> Result<()> {
       tokio::pin!(tweet_stream);
 
       while let Some(Ok(chunk)) = tweet_stream.next().await {
-        let raid_tweet = match chunk {
-          Ok(tweet) => tweet,
-          // If the error occur means this tweet stream failed in and_then combinators.
-          Err(_) => continue,
+        match chunk {
+          Ok(raid_tweet) => {
+            let clients = finder_clients.clone();
+            tokio::spawn(async move {
+              let readable_clients = clients.read().await;
+              readable_clients.iter().for_each(move |(_, client)| {
+                if client.boss_names.contains(&raid_tweet.boss_name) {
+                  if let Ok(bytes) = raid_tweet.to_bytes() {
+                    let msg = warp::ws::Message::binary(bytes);
+                    let _ = client.sender.send(Ok(msg));
+                  }
+                }
+              });
+            });
+          }
+          Err(stream_error) => match stream_error {
+            error::Error::StreamUnexpectedError => return Err(stream_error),
+            error::Error::StreamEOFError => return Err(stream_error),
+            error::Error::BadResponseError => return Err(stream_error),
+            _ => {
+              println!("{:?}", stream_error);
+              continue
+            },
+          },
         };
-        info!("Find raid tweet of boss: {}!", raid_tweet.get_boss_name());
-        let clients = finder_clients.clone();
-
-        tokio::spawn(async move {
-          let readable_clients = clients.read().await;
-          readable_clients.iter().for_each(move |(_, client)| {
-            if client.boss_names.contains(&raid_tweet.boss_name) {
-              if let Ok(bytes) = raid_tweet.to_bytes() {
-                let msg = warp::ws::Message::binary(bytes);
-                let _ = client.sender.send(Ok(msg));
-              }
-            }
-          });
-        });
       }
 
-      Err::<(), error::Error>(error::Error::StreamEOFError)
+      Err::<(), error::Error>(error::Error::StreamUnexpectedError)
     },
     |e: error::Error| match e {
-      error::Error::StreamEOFError => {
-        info!("Get EOF in twitter stream api will restart in 5 second.");
+      error::Error::StreamUnexpectedError => {
+        info!("Get unexpected error while streaming tweets will restart in 5 second.");
         RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
+      }
+      error::Error::StreamEOFError => {
+        info!("Get EOF in twitter stream api will restart in 1 second.");
+        RetryPolicy::WaitRetry(std::time::Duration::from_secs(1))
       }
       _ => {
         log_error!("Some error encounter, error: {:?}", e);
