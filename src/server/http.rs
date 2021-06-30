@@ -7,7 +7,7 @@ use log::info;
 use std::{net::SocketAddr, sync::Arc};
 use warp::Filter;
 
-pub async fn create_http_server(redis: Arc<Redis>, finder_clients: FinderClients) {
+pub fn create_http_server(redis: Arc<Redis>, finder_clients: FinderClients) {
   let app_state = AppState::new(redis, finder_clients);
 
   let server = warp::any().map(move || app_state.clone());
@@ -40,5 +40,7 @@ pub async fn create_http_server(redis: Arc<Redis>, finder_clients: FinderClients
 
   info!("gRPC server listening on {}...", addr);
 
-  warp::serve(routes).run(addr).await;
+  tokio::spawn(async move {
+    warp::serve(routes).run(addr).await;
+  });
 }

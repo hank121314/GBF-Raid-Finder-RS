@@ -2,7 +2,7 @@ use crate::{
   client::redis::Redis,
   common::redis::{gbf_persistence_raid_tweet_key, gbf_raid_boss_raw_key},
   error,
-  models::{TranslatorResult, Tweet},
+  models::{Language, TranslatorResult, Tweet},
   parsers::status::StatusParser,
   proto::{raid_boss_raw::RaidBossRaw, raid_tweet::RaidTweet},
   resources::{
@@ -14,21 +14,27 @@ use crate::{
 };
 
 use log::{debug, error};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
 enum TweetActorMessage {
   ParseTweet {
     tweet: Tweet,
-    respond_to: oneshot::Sender<Option<(RaidBossRaw, RaidTweet)>>,
+    respond_to: oneshot::Sender<Result<(RaidBossRaw, RaidTweet)>>,
   },
   TranslateBossName {
-    raid_boss: RaidBossRaw,
+    raid_boss_raw: RaidBossRaw,
     respond_to: oneshot::Sender<TranslatorResult>,
+  },
+  TranslateTweet {
+    raid_boss_raw: RaidBossRaw,
+    raid_tweet: RaidTweet,
+    translator_result: TranslatorResult,
+    respond_to: oneshot::Sender<Result<RaidTweet>>,
   },
   PersistRaidTweet {
     raid_tweet: RaidTweet,
-    respond_to: oneshot::Sender<()>,
+    respond_to: oneshot::Sender<Result<RaidTweet>>,
   },
 }
 
@@ -59,27 +65,30 @@ impl TweetActor {
               .redis
               .set_protobuf(&redis_key, raid_bow_raw.clone(), BOSS_EXPIRE_IN_30_DAYS_TTL)
               .await?;
-            let _ = respond_to.send(Some((raid_bow_raw, raid_tweet)));
+            let _ = respond_to.send(Ok((raid_bow_raw, raid_tweet)));
           }
 
           Ok(())
         }
         _ => {
           debug!("Twitter filter stream find the source which is not from granblue fantasy");
-          let _ = respond_to.send(None);
+          let _ = respond_to.send(Err(error::Error::CannotParseTweet { tweet }));
 
           Ok(())
         }
       },
-      TweetActorMessage::TranslateBossName { raid_boss, respond_to } => {
+      TweetActorMessage::TranslateBossName {
+        raid_boss_raw,
+        respond_to,
+      } => {
         let translate_map = self.map.read().await;
         // Return directly if boss_name is already translated.
-        match translate_map.get(raid_boss.get_boss_name()) {
+        match translate_map.get(raid_boss_raw.get_boss_name()) {
           Some(translated) => {
             // If value in map is an empty string, it indicate that the translation process is processing.
             match translated.is_empty() {
               true => {
-                debug!("Translating task of {} is pending...", raid_boss.get_boss_name());
+                debug!("Translating task of {} is pending...", raid_boss_raw.get_boss_name());
                 let _ = respond_to.send(TranslatorResult::Pending);
               }
               false => {
@@ -96,11 +105,11 @@ impl TweetActor {
             drop(translate_map);
             let mut writable_map = self.map.write().await;
             // Write an empty string to `map` means that translation is pending.
-            writable_map.insert(raid_boss.get_boss_name().into(), "".into());
+            writable_map.insert(raid_boss_raw.get_boss_name().into(), "".into());
             drop(writable_map);
             // Response to handler before processing translation tasks.
             let _ = respond_to.send(TranslatorResult::Pending);
-            debug!("Find new boss {}. Translating...", raid_boss.get_boss_name());
+            debug!("Find new boss {}. Translating...", raid_boss_raw.get_boss_name());
 
             // Prepare for translation task.
             let map = self.map.clone();
@@ -108,7 +117,7 @@ impl TweetActor {
 
             // Do translation parallel
             tokio::spawn(async move {
-              translator::translator_tasks(raid_boss, redis, map).await?;
+              translator::translator_tasks(raid_boss_raw, redis, map).await?;
 
               Ok::<(), error::Error>(())
             });
@@ -117,8 +126,38 @@ impl TweetActor {
           }
         }
       }
+      TweetActorMessage::TranslateTweet {
+        raid_boss_raw,
+        mut raid_tweet,
+        translator_result,
+        respond_to,
+      } => {
+        let language = Language::from_str(raid_boss_raw.get_language()).unwrap();
+        let translated_tweet = match language {
+          // Only English boss name should be converted into Japanese
+          Language::English => match translator_result {
+            TranslatorResult::Pending => Err(error::Error::CannotTranslateError {
+              name: raid_boss_raw.get_boss_name().into(),
+            }),
+            TranslatorResult::Success {
+              result: translated_name,
+            } => {
+              if language == Language::English {
+                raid_tweet.set_boss_name(translated_name);
+              }
+
+              Ok(raid_tweet)
+            }
+          },
+          Language::Japanese => Ok(raid_tweet),
+        };
+
+        let _ = respond_to.send(translated_tweet);
+
+        Ok(())
+      }
       TweetActorMessage::PersistRaidTweet { raid_tweet, respond_to } => {
-        let _ = respond_to.send(());
+        let _ = respond_to.send(Ok(raid_tweet.clone()));
 
         let redis = self.redis.clone();
 
@@ -162,7 +201,7 @@ impl TweetActorHandle {
     Self { sender }
   }
 
-  pub async fn parse_tweet(&self, tweet: Tweet) -> Option<(RaidBossRaw, RaidTweet)> {
+  pub async fn parse_tweet(&self, tweet: Tweet) -> Result<(RaidBossRaw, RaidTweet)> {
     let (send, recv) = oneshot::channel();
     let msg = TweetActorMessage::ParseTweet {
       tweet: tweet.clone(),
@@ -175,21 +214,38 @@ impl TweetActorHandle {
   pub async fn translate_boss_name(&self, raid_boss_raw: RaidBossRaw) -> TranslatorResult {
     let (send, recv) = oneshot::channel();
     let msg = TweetActorMessage::TranslateBossName {
-      raid_boss: raid_boss_raw.clone(),
+      raid_boss_raw,
       respond_to: send,
     };
     let _ = self.sender.send(msg).await;
     recv.await.expect("Actor task has been killed")
   }
 
-  pub async fn persist_raid_tweet(&self, raid_tweet: RaidTweet) {
+  pub async fn translate_tweet(
+    &self,
+    raid_boss_raw: RaidBossRaw,
+    raid_tweet: RaidTweet,
+    translator_result: TranslatorResult,
+  ) -> Result<RaidTweet> {
+    let (send, recv) = oneshot::channel();
+    let msg = TweetActorMessage::TranslateTweet {
+      raid_boss_raw,
+      raid_tweet,
+      translator_result,
+      respond_to: send,
+    };
+    let _ = self.sender.send(msg).await;
+    recv.await.expect("Actor task has been killed")
+  }
+
+  pub async fn persist_raid_tweet(&self, raid_tweet: RaidTweet) -> Result<RaidTweet> {
     let (send, recv) = oneshot::channel();
     let msg = TweetActorMessage::PersistRaidTweet {
       raid_tweet,
       respond_to: send,
     };
     let _ = self.sender.send(msg).await;
-    recv.await.expect("Actor task has been killed");
+    recv.await.expect("Actor task has been killed")
   }
 }
 
