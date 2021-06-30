@@ -47,7 +47,7 @@ impl RaidBossRaw {
 
   // Take field
   pub fn take_boss_name(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.boss_name, ::std::string::String::new())
+    ::std::mem::take(&mut self.boss_name)
   }
 
   pub fn get_level(&self) -> i32 {
@@ -82,7 +82,7 @@ impl RaidBossRaw {
 
   // Take field
   pub fn take_image(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.image, ::std::string::String::new())
+    ::std::mem::take(&mut self.image)
   }
 
   pub fn get_language(&self) -> &str {
@@ -105,6 +105,6 @@ impl RaidBossRaw {
 
   // Take field
   pub fn take_language(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.language, ::std::string::String::new())
+    ::std::mem::take(&mut self.language)
   }
 }

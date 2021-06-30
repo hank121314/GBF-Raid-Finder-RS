@@ -19,12 +19,12 @@ pub async fn get_persistence_boss(
       .redis
       .keys(gbf_persistence_raid_tweets_keys(boss_name))
       .await
-      .map_err(|_| error::HttpError::CannotGetRedisKeysError.new())?;
+      .map_err(|_| error::HttpError::CannotGetRedisKeysError.reject())?;
     let tweets_bytes: Vec<Vec<u8>> = app_state
       .redis
       .mget_protobuf_raw(persistence_keys)
       .await
-      .map_err(|_| error::HttpError::CannotGetRedisKeysError.new())?;
+      .map_err(|_| error::HttpError::CannotGetRedisKeysError.reject())?;
     response.insert(boss_name, tweets_bytes);
   }
 

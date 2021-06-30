@@ -77,7 +77,7 @@ impl OAuthRequestBuilder
       method: method.into(),
       config,
       oauth,
-      query: query.into_iter().map(|q| q).collect::<Vec<_>>(),
+      query: query.into_iter().collect::<Vec<_>>(),
     }
   }
 

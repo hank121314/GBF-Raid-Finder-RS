@@ -22,6 +22,7 @@ pub struct RaidTweet {
 }
 
 #[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 impl RaidTweet {
   pub fn new() -> RaidTweet {
     ::std::default::Default::default()
@@ -88,7 +89,7 @@ impl RaidTweet {
 
   // Take field
   pub fn take_screen_name(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.screen_name, ::std::string::String::new())
+    ::std::mem::take(&mut self.screen_name)
   }
 
   pub fn get_boss_name(&self) -> &str {
@@ -111,7 +112,7 @@ impl RaidTweet {
 
   // Take field
   pub fn take_boss_name(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.boss_name, ::std::string::String::new())
+    ::std::mem::take(&mut self.boss_name)
   }
 
   pub fn get_raid_id(&self) -> &str {
@@ -134,7 +135,7 @@ impl RaidTweet {
 
   // Take field
   pub fn take_raid_id(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.raid_id, ::std::string::String::new())
+    ::std::mem::take(&mut self.raid_id)
   }
 
   pub fn get_text(&self) -> &str {
@@ -157,7 +158,7 @@ impl RaidTweet {
 
   // Take field
   pub fn take_text(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.text, ::std::string::String::new())
+    ::std::mem::take(&mut self.text)
   }
 
   pub fn get_created(&self) -> u64 {
@@ -192,7 +193,7 @@ impl RaidTweet {
 
   // Take field
   pub fn take_language(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.language, ::std::string::String::new())
+    ::std::mem::take(&mut self.language)
   }
 
   pub fn get_profile_image(&self) -> &str {
@@ -215,7 +216,7 @@ impl RaidTweet {
 
   // Take field
   pub fn take_profile_image(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.profile_image, ::std::string::String::new())
+    ::std::mem::take(&mut self.profile_image)
   }
 
   pub fn to_bytes(&self) -> Result<Vec<u8>> {

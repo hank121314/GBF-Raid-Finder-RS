@@ -112,7 +112,7 @@ pub enum HttpError {
 }
 
 impl HttpError {
-  pub fn new(&self) -> warp::reject::Rejection {
+  pub fn reject(&self) -> warp::reject::Rejection {
     match self {
       HttpError::CannotGetRedisKeysError => warp::reject::custom(HttpRejection::new("Cannot get redis keys.", 404)),
       HttpError::CannotMGetRedisError => warp::reject::custom(HttpRejection::new("Cannot mget redis values.", 404)),

@@ -17,7 +17,7 @@ pub enum TranslatorResult {
 impl std::fmt::Display for TranslatorResult {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
-      TranslatorResult::Pending => write!(f, "{}", ""),
+      TranslatorResult::Pending => write!(f, ""),
       TranslatorResult::Success { result } => write!(f, "{}", result),
     }
   }

@@ -54,7 +54,7 @@ pub async fn translator_tasks(
     .keys(possible_name)
     .await?
     .into_iter()
-    .filter(|possible_key| match possible_key.split(".").last() {
+    .filter(|possible_key| match possible_key.split('.').last() {
       Some(last) => !paired_keys.iter().any(|key| key == last),
       None => false,
     })

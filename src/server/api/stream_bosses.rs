@@ -56,7 +56,7 @@ fn sending_message(
   app_state: AppState,
 ) {
   tokio::spawn(receiver.forward(client_tx).then(|result| async move {
-    if let Err(_) = result {
+    if result.is_err() {
       app_state.clients.write().await.remove(client_id.as_str());
       info!("Client: {} gone!", client_id);
     }

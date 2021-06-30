@@ -50,7 +50,7 @@ impl RaidBoss {
 
   // Take field
   pub fn take_en_name(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.en_name, ::std::string::String::new())
+    ::std::mem::take(&mut self.en_name)
   }
 
   pub fn get_jp_name(&self) -> &str {
@@ -73,7 +73,7 @@ impl RaidBoss {
 
   // Take field
   pub fn take_jp_name(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.jp_name, ::std::string::String::new())
+    ::std::mem::take(&mut self.jp_name)
   }
 
   pub fn get_level(&self) -> i32 {
@@ -108,6 +108,6 @@ impl RaidBoss {
 
   // Take field
   pub fn take_image(&mut self) -> ::std::string::String {
-    ::std::mem::replace(&mut self.image, ::std::string::String::new())
+    ::std::mem::take(&mut self.image)
   }
 }
