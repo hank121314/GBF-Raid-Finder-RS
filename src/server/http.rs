@@ -11,6 +11,13 @@ pub fn create_http_server(redis: Arc<Redis>, finder_clients: FinderClients) {
   let app_state = AppState::new(redis, finder_clients);
 
   let server = warp::any().map(move || app_state.clone());
+
+  let healthz_route = warp::get()
+    .and(warp::path("healthz"))
+    .and(warp::path::end())
+    .and(server.clone())
+    .map(api::healthz::healthz);
+
   let get_bosses_route = warp::post()
     .and(warp::path("get_bosses"))
     .and(warp::path::end())
@@ -34,7 +41,10 @@ pub fn create_http_server(redis: Arc<Redis>, finder_clients: FinderClients) {
       ws.on_upgrade(move |websocket| api::stream_bosses::stream_bosses(websocket, state))
     });
 
-  let routes = get_bosses_route.or(get_persistence_boss).or(stream_bosses_route);
+  let routes = healthz_route
+    .or(get_bosses_route)
+    .or(get_persistence_boss)
+    .or(stream_bosses_route);
 
   let addr = "0.0.0.0:50051".parse::<SocketAddr>().unwrap();
 
