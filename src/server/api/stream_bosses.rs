@@ -49,6 +49,14 @@ pub async fn stream_bosses(ws: warp::ws::WebSocket, app_state: AppState) {
   }
 }
 
+///
+/// A thread to forward raid tweet message to websocket client
+/// 
+/// # Arguments
+/// * `client_id`: the client where we want to send, use to remove the global state when retrieving error.
+/// * `client_tx`: client transportation.
+/// * `receiver`: twitter stream receiver.
+///
 fn sending_message(
   client_id: String,
   client_tx: SplitSink<warp::ws::WebSocket, warp::ws::Message>,

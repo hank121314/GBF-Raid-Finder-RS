@@ -7,6 +7,12 @@ pub struct GetPersistenceBossRequest {
   pub boss_names: Vec<String>,
 }
 
+/// 
+/// Get raid tweet which persist in the database by its name
+/// 
+/// # Arguments
+/// * `request` - A JSON object with key of boss_names which is a vector string.
+/// 
 pub async fn get_persistence_boss(
   request: GetPersistenceBossRequest,
   app_state: AppState,

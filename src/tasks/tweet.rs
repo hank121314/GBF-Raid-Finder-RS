@@ -18,20 +18,49 @@ use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
 enum TweetActorMessage {
+  ///
+  /// If the tweet is came from Granblue Fantasy source using 
+  /// StatusParser to parse the tweet to raid_tweet and raid_boss_raw.
+  /// If it is from others source throw an CannotParseTweet error.
+  ///
+  /// # Arguments
+  /// * `tweet` - the original tweet which came from twitter streaming api.
+  ///
   ParseTweet {
     tweet: Tweet,
     respond_to: oneshot::Sender<Result<(RaidBossRaw, RaidTweet)>>,
   },
+  ///
+  /// Check whether actor translator map has the raid_boss_row.boss_name().
+  /// If translator map has the name, just return the translated name.
+  /// If translator map has the name but it is an empty string, means that translation task is pending.
+  /// If not create a task to do the translation.
+  ///
+  /// # Arguments
+  /// * `raid_boss_raw` - the raid_boss which we want to translate.
+  /// 
   TranslateBossName {
     raid_boss_raw: RaidBossRaw,
     respond_to: oneshot::Sender<TranslatorResult>,
   },
+  ///
+  /// Translate the english boss name raid_tweet to japanese name.
+  /// 
+  /// # Arguments
+  /// * `raid_boss_raw` - use to show the error message of boss name.
+  /// * `raid_tweet` - raid tweet which should be translated.
+  /// * `translator_result` - result from TranslateBossName
   TranslateTweet {
     raid_boss_raw: RaidBossRaw,
     raid_tweet: RaidTweet,
     translator_result: TranslatorResult,
     respond_to: oneshot::Sender<Result<RaidTweet>>,
   },
+  ///
+  /// Persist the raid tweet into redis.
+  /// 
+  /// # Arguments
+  /// * `raid_tweet` - raid_tweet which should be persisted.
   PersistRaidTweet {
     raid_tweet: RaidTweet,
     respond_to: oneshot::Sender<Result<RaidTweet>>,
@@ -322,7 +351,7 @@ mod tests {
     while max_retry != 0 {
       // Sleep 10 seconds to wait for translation task
       tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-      match actor.translate_boss_name(raid_boss_raw.clone()).await.unwrap() {
+      match actor.translate_boss_name(raid_boss_raw.clone()).await {
         TranslatorResult::Pending => {
           max_retry -= 1;
         }
@@ -350,7 +379,7 @@ mod tests {
     assert_eq!(raid_boss_raw.image, "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg");
     assert_eq!(raid_tweet.boss_name, "Lv150 プロトバハムート");
     assert_eq!(raid_tweet.tweet_id, 1390247452125458434);
-    let translated_name = actor.translate_boss_name(raid_boss_raw).await.unwrap();
+    let translated_name = actor.translate_boss_name(raid_boss_raw).await;
     assert_eq!("Lvl 150 Proto Bahamut", translated_name.to_string());
 
     Ok(())
@@ -370,7 +399,7 @@ mod tests {
     assert_eq!(raid_boss_raw.image, "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg");
     assert_eq!(raid_tweet.boss_name, "Lvl 150 Proto Bahamut");
     assert_eq!(raid_tweet.tweet_id, 1390247452125458434);
-    let translated_name = actor.translate_boss_name(raid_boss_raw).await.unwrap();
+    let translated_name = actor.translate_boss_name(raid_boss_raw).await;
     assert_eq!("Lv150 プロトバハムート", translated_name.to_string());
 
     Ok(())

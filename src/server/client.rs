@@ -1,5 +1,12 @@
 use tokio::sync::mpsc;
 
+///
+/// Granblue Fantasy Finder websocket client
+/// 
+/// # Arguments
+/// * `boss_names`: came from client message, should include the raid boss name which client want to receive.
+/// * `sender`: A sender which can send the tweet to the client.
+/// 
 #[derive(Clone)]
 pub struct FinderClient {
   pub boss_names: Vec<String>,

@@ -49,22 +49,25 @@ pub async fn main() -> Result<()> {
     "true",
   );
 
-  // Create tweet handler
-  let singleton_redis = Redis::new(redis_url)?;
+  let redis = Redis::new(redis_url)?;
 
-  let redis = Arc::new(singleton_redis);
+  let redis = Arc::new(redis);
 
   // Initialize translator map with redis keys `gbf:translator:*`
-  let map = get_translator_map(&redis).await.unwrap_or_else(|_| HashMap::new());
+  let translator_map = get_translator_map(&redis).await.unwrap_or_else(|_| HashMap::new());
 
-  let tweet_handler = TweetActorHandle::new(redis.clone(), map);
+  // Create tweet handler to consuming incoming stream
+  let tweet_handler = TweetActorHandle::new(redis.clone(), translator_map);
 
+  // Create an empty client map
   let finder_clients: FinderClients = Arc::new(RwLock::new(HashMap::new()));
 
+  // Create http/ws server
   create_http_server(redis, finder_clients.clone());
 
   FutureRetry::new(
     || async {
+      // Get tweet stream source from STREAM_URL
       let stream: StreamingSource<Tweet> = filter_stream_client.oauth_stream(STREAM_URL).await?;
 
       let tweet_stream = stream
@@ -90,6 +93,8 @@ pub async fn main() -> Result<()> {
           Ok(raid_tweet) => {
             tasks::websocket::sending_message_to_websocket_client(raid_tweet, finder_clients.clone());
           }
+          // Only if we get StreamUnexpectedError/StreamEOFError/BadResponseError should reconnect the stream.
+          // Otherwise we will skip the tweet.
           Err(stream_error) => match stream_error {
             error::Error::StreamUnexpectedError => return Err(stream_error),
             error::Error::StreamEOFError => return Err(stream_error),
@@ -104,6 +109,10 @@ pub async fn main() -> Result<()> {
     |e: error::Error| match e {
       error::Error::StreamUnexpectedError => {
         info!("Get unexpected error while streaming tweets will restart in 5 second.");
+        RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
+      }
+      error::Error::BadResponseError => {
+        info!("Get bad response when connecting to twitter stream api will restart in 5 second.");
         RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
       }
       error::Error::StreamEOFError => {

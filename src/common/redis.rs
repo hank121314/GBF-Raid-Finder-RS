@@ -10,6 +10,7 @@ use crate::{
 };
 use std::{collections::HashMap, str::FromStr};
 
+/// 
 /// Get raw boss redis value with its instance
 ///
 /// # Arguments
@@ -43,7 +44,9 @@ pub fn gbf_raid_boss_raw_key(raid_boss_raw: &RaidBossRaw) -> String {
   )
 }
 
+///
 /// Get translated boss list with level
+/// If level equals to 0 means get all bosses.
 ///
 /// # Arguments
 ///
@@ -142,6 +145,7 @@ pub fn gbf_persistence_raid_tweet_key<S: Into<String>>(raid_boss_name: S, tweet_
   )
 }
 
+/// 
 /// Get bosses which are at the same level with given raid_boss_raw.
 ///
 /// # Arguments

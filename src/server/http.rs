@@ -7,6 +7,13 @@ use log::info;
 use std::{net::SocketAddr, sync::Arc};
 use warp::Filter;
 
+///
+/// Create an http server listening on port 50051
+/// 
+/// # Arguments
+/// * `redis` - Granblue fantasy finder rs backend database client
+/// * `finder_clients` - a map of clients.
+/// 
 pub fn create_http_server(redis: Arc<Redis>, finder_clients: FinderClients) {
   let app_state = AppState::new(redis, finder_clients);
 

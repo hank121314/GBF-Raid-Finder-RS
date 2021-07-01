@@ -7,6 +7,13 @@ pub struct GetBossRequest {
   pub level: u32,
 }
 
+///
+/// Get all bosses filter by level
+/// If level equals to zero it will return all bosses in database.
+/// 
+/// # Arguments:
+/// * `request`: GetBossRequest should be a json object with level key.
+/// 
 pub async fn get_bosses(request: GetBossRequest, app_state: AppState) -> Result<impl warp::Reply, warp::Rejection> {
   let level = request.level;
 
