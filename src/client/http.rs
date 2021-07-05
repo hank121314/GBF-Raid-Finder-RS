@@ -56,7 +56,7 @@ impl FilterStreamClient {
     let oauth = OAuthParameters::new(self.config.api_key.clone(), self.config.access_token.clone(), OAUTH_VERSION);
     let oauth_builder = OAuthRequestBuilder::new(
       url,
-      reqwest::Method::POST.as_str(),
+      reqwest::Method::POST,
       self.config.clone(),
       oauth,
       self.parameters.clone(),

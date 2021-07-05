@@ -1,8 +1,8 @@
 use crate::{error, Result};
 
-use futures::{AsyncRead, Future, Stream};
-use http::Request;
-use isahc::{AsyncBody, RequestExt, ResponseFuture};
+use log::info;
+use futures::{Future, Stream};
+use hyper::{client::ResponseFuture, Body, Request};
 use serde::de::DeserializeOwned;
 use std::{
   pin::Pin,
@@ -10,9 +10,9 @@ use std::{
 };
 
 pub struct StreamingSource<T: DeserializeOwned> {
-  body: Option<AsyncBody>,
-  request: Option<Request<()>>,
-  response: Option<ResponseFuture<'static>>,
+  body: Option<Body>,
+  request: Option<Request<Body>>,
+  response: Option<ResponseFuture>,
   tweet: Option<T>,
 }
 
@@ -20,7 +20,7 @@ impl<T> StreamingSource<T>
 where
   T: DeserializeOwned,
 {
-  pub fn new(request: Request<()>) -> Self {
+  pub fn new(request: Request<Body>) -> Self {
     Self {
       request: Some(request),
       response: None,
@@ -40,7 +40,10 @@ where
 
   fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     if let Some(req) = self.request.take() {
-      self.response = Some(req.send_async());
+      let connector = hyper_tls::HttpsConnector::new();
+      let client = hyper::Client::builder().build(connector);
+      let response = client.request(req);
+      self.response = Some(response);
     }
 
     if let Some(mut response) = self.response.take() {
@@ -56,30 +59,28 @@ where
             return Poll::Ready(Some(Err(error::Error::BadResponseError)));
           }
 
+          info!("Connected to twitter streaming api!");
           self.body = Some(res.into_body());
         }
-      }
+      };
     }
 
     if let Some(mut body) = self.body.take() {
-      let mut buffer = [0; 16384];
       loop {
-        return match Pin::new(&mut body).poll_read(cx, &mut buffer) {
+        return match Pin::new(&mut body).poll_next(cx) {
           Poll::Pending => {
             self.body = Some(body);
             Poll::Pending
           }
-          Poll::Ready(Err(_)) => {
+          Poll::Ready(None) => Poll::Ready(None),
+          Poll::Ready(Some(Err(_))) => {
             self.body = Some(body);
-            Poll::Ready(Some(Err(error::Error::StreamUnexpectedError)))
+            Poll::Ready(Some(Err(error::Error::StreamEOFError)))
           }
-          Poll::Ready(Ok(len)) => {
-            if len == 0 {
-              return Poll::Ready(Some(Err(error::Error::StreamEOFError)));
-            }
-            let string = String::from_utf8(buffer[..len].to_owned())
-              .map_err(|error| error::Error::StringParseFromBytesError { error })?;
+          Poll::Ready(Some(Ok(chunk))) => {
             self.body = Some(body);
+            let string =
+              String::from_utf8(chunk.to_vec()).map_err(|error| error::Error::StringParseFromBytesError { error })?;
             let data =
               serde_json::from_str::<T>(string.as_ref()).map_err(|error| error::Error::JSONParseError { error })?;
             self.tweet = Some(data);

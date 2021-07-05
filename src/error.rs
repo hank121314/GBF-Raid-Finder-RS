@@ -32,7 +32,7 @@ pub enum Error {
 
   /// HTTP Request Error
   #[snafu(display("Cannot get stream, error: {}", error))]
-  CannotGetStream { error: isahc::error::Error },
+  CannotGetStream { error: hyper::Error },
   #[snafu(display("Http request get bad response."))]
   BadResponseError,
   #[snafu(display("Invalid http method"))]

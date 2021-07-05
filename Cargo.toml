@@ -39,9 +39,9 @@ imgref = "1.9.0"
 dssim = "3.0.1"
 lazy_static = "1.4.0"
 # Http request related
-isahc = "1.4.0"
 http = "0.2.4"
-reqwest = { version = "0.11.3", features = ["stream", "json"] }
+hyper-tls = "0.5.0"
+reqwest = { version = "0.11.4", features = ["stream", "json"] }
 # Database
 redis = { git = "https://github.com/hank121314/redis-rs.git", branch = "master", features = ["tokio-comp"] }
 

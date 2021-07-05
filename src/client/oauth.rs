@@ -2,11 +2,10 @@ use crate::{
   client::parameter::{Parameter, ParameterConvertible},
   common::{chrono::current_timestamp, encode::percent_encode},
   config::Config,
-  error::Error,
-  Result,
+  error, Result,
 };
 use hmac::{Hmac, Mac, NewMac};
-use http::header::{AUTHORIZATION, CONNECTION, CONTENT_TYPE};
+use hyper::{header::{AUTHORIZATION, CONNECTION, CONTENT_TYPE}, Method, Body};
 use nanoid::nanoid;
 use sha1::Sha1;
 use std::borrow::Borrow;
@@ -53,28 +52,26 @@ impl OAuthParameters {
 
 pub struct OAuthRequestBuilder {
   pub url: String,
-  pub method: String,
+  pub method: Method,
   pub config: Config,
   pub oauth: OAuthParameters,
   pub query: Vec<Parameter>,
 }
 
-impl OAuthRequestBuilder
-{
-  pub fn new<S1, S2, I: IntoIterator<Item = Parameter>>(
+impl OAuthRequestBuilder {
+  pub fn new<S1, I: IntoIterator<Item = Parameter>>(
     url: S1,
-    method: S2,
+    method: Method,
     config: Config,
     oauth: OAuthParameters,
     query: I,
   ) -> Self
   where
     S1: Into<String>,
-    S2: Into<String>,
   {
     OAuthRequestBuilder {
       url: url.into(),
-      method: method.into(),
+      method,
       config,
       oauth,
       query: query.into_iter().collect::<Vec<_>>(),
@@ -108,7 +105,7 @@ impl OAuthRequestBuilder
   /// 4. Append the ‘&’ character to the output string.
   /// 5/ Percent encode the parameter string and append it to the output string.
   fn generate_base_signature_string(&self) -> String {
-    let method = self.method.to_uppercase();
+    let method = self.method.as_str();
     let url = percent_encode(self.url.as_str());
     let parameters = self.collecting_parameters();
     let encoded_parameters = percent_encode(parameters.as_str());
@@ -164,21 +161,22 @@ impl OAuthRequestBuilder
   /// Build RequestBuilder
   ///
   /// If self.method is not a valid Http Method it will return an error.
-  pub fn build(&self) -> Result<http::Request<()>> {
-    let builder = http::Request::builder();
+  pub fn build(&self) -> Result<hyper::Request<Body>> {
     let host = format!("{}?{}", self.url.clone(), self.query());
 
-    if let Ok(method) = self.method.clone().parse::<http::Method>() {
-      return builder
-        .method(method)
-        .uri(host)
-        .header(CONNECTION, "close")
-        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(AUTHORIZATION, self.create_authorization_header())
-        .body(())
-        .map_err(|_| Error::CannotBuildRequest);
-    }
+    let client = match self.method {
+      Method::GET => hyper::Request::get(host),
+      Method::POST => hyper::Request::post(host),
+      _ => {
+        return Err(error::Error::InvalidHttpMethod);
+      }
+    };
 
-    Err(Error::InvalidHttpMethod)
+    client
+      .header(CONNECTION, "close")
+      .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+      .header(AUTHORIZATION, self.create_authorization_header())
+      .body(Body::empty())
+      .map_err(|_| error::Error::CannotBuildRequest)
   }
 }
