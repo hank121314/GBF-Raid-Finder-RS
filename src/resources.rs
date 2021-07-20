@@ -11,6 +11,15 @@ pub mod http {
   pub const OAUTH_VERSION: &str = "1.0";
 }
 
+pub mod ws {
+  /// This is a custom ping pong packet payload for the browser WebSocket client.
+  /// Since there is no javascript ping/pong api, so we need to have a custom ping pong packet payload.
+  /// For those clients that support ping/pong api, we can just use native ping/pong api.
+  /// Custom ping pong is not the recommended way to handle this situation.
+  pub const PING: &str = "__PING__";
+  pub const PONG: &str = "__PONG__";
+}
+
 pub mod redis {
   pub const GBF_PREFIX: &str = "gbf";
 
