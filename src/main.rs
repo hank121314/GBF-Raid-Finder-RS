@@ -34,13 +34,11 @@ pub type Result<T, E = error::Error> = std::result::Result<T, E>;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 pub async fn main() -> Result<()> {
-  let log_path = env::var("GBF_RAID_FINDER_LOG_PATH").unwrap_or_else(|_| "/var/log".to_owned());
+  let config = Config::new()?;
 
-  logger::create_logger(log_path, "raid-finder-stream", 3)?;
+  logger::create_logger(config.log_path.as_str(), "raid-finder-stream", 3)?;
 
   let redis_url = env::var("REDIS_URL").map_err(|_| error::Error::RedisURLNotFound)?;
-
-  let config = Config::new()?;
 
   // Create twitter filter stream client
   let filter_stream_client = FilterStreamClient::new(
