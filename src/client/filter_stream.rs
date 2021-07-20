@@ -1,8 +1,8 @@
 use crate::{error, Result};
 
-use log::info;
 use futures::{Future, Stream};
 use hyper::{client::ResponseFuture, Body, Request};
+use log::info;
 use serde::de::DeserializeOwned;
 use std::{
   pin::Pin,
@@ -66,31 +66,32 @@ where
     }
 
     if let Some(mut body) = self.body.take() {
-      loop {
-        return match Pin::new(&mut body).poll_next(cx) {
-          Poll::Pending => {
-            self.body = Some(body);
-            Poll::Pending
+      return match Pin::new(&mut body).poll_next(cx) {
+        Poll::Pending => {
+          self.body = Some(body);
+
+          Poll::Pending
+        }
+        Poll::Ready(None) => Poll::Ready(None),
+        Poll::Ready(Some(Err(_))) => {
+          self.body = Some(body);
+
+          Poll::Ready(Some(Err(error::Error::StreamEOFError)))
+        }
+        Poll::Ready(Some(Ok(chunk))) => {
+          self.body = Some(body);
+          let string =
+            String::from_utf8(chunk.to_vec()).map_err(|error| error::Error::StringParseFromBytesError { error })?;
+          let data =
+            serde_json::from_str::<T>(string.as_ref()).map_err(|error| error::Error::JSONParseError { error })?;
+          self.tweet = Some(data);
+          if let Some(tweet) = self.tweet.take() {
+            return Poll::Ready(Some(Ok(tweet)));
           }
-          Poll::Ready(None) => Poll::Ready(None),
-          Poll::Ready(Some(Err(_))) => {
-            self.body = Some(body);
-            Poll::Ready(Some(Err(error::Error::StreamEOFError)))
-          }
-          Poll::Ready(Some(Ok(chunk))) => {
-            self.body = Some(body);
-            let string =
-              String::from_utf8(chunk.to_vec()).map_err(|error| error::Error::StringParseFromBytesError { error })?;
-            let data =
-              serde_json::from_str::<T>(string.as_ref()).map_err(|error| error::Error::JSONParseError { error })?;
-            self.tweet = Some(data);
-            if let Some(tweet) = self.tweet.take() {
-              return Poll::Ready(Some(Ok(tweet)));
-            }
-            Poll::Ready(Some(Err(error::Error::StreamEOFError)))
-          }
-        };
-      }
+
+          Poll::Ready(Some(Err(error::Error::StreamEOFError)))
+        }
+      };
     } else {
       Poll::Ready(Some(Err(error::Error::FutureAlreadyCompleted)))
     }
