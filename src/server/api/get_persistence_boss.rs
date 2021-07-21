@@ -5,6 +5,7 @@ use std::collections::HashMap;
 #[derive(Deserialize, Clone)]
 pub struct GetPersistenceBossRequest {
   pub boss_names: Vec<String>,
+  pub limit: u32,
 }
 
 /// 
@@ -18,14 +19,23 @@ pub async fn get_persistence_boss(
   app_state: AppState,
 ) -> Result<impl warp::Reply, warp::Rejection> {
   let boss_names = request.boss_names;
+  let limit = request.limit;
   let mut response = HashMap::new();
 
   for boss_name in boss_names.iter() {
-    let persistence_keys = app_state
+    let mut persistence_keys = app_state
       .redis
       .keys(gbf_persistence_raid_tweets_keys(boss_name))
       .await
       .map_err(|_| error::HttpError::CannotGetRedisKeysError.reject())?;
+    persistence_keys.sort_by(|a, b| {
+      let last = |string: String| string.split('.').last().map(|str| str.to_owned());
+      if let (Some(last_a), Some(last_b)) = (last(a.into()), last(b.into())) {
+        return last_b.cmp(&last_a);
+      }
+      b.cmp(a)
+    });
+    persistence_keys.truncate(limit as usize);
     let tweets_bytes: Vec<Vec<u8>> = app_state
       .redis
       .mget_protobuf_raw(persistence_keys)

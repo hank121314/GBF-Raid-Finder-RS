@@ -135,13 +135,14 @@ pub fn gbf_persistence_raid_tweets_keys<S: Into<String>>(raid_boss_name: S) -> S
 /// let key = gbf_persistence_raid_tweet_key("Lv200 アーカーシャ", 1234567890);
 /// assert_eq!("gbf:persistence:Lv200 アーカーシャ.1234567890", key);
 /// ```
-pub fn gbf_persistence_raid_tweet_key<S: Into<String>>(raid_boss_name: S, tweet_id: u64) -> String {
+pub fn gbf_persistence_raid_tweet_key<S: Into<String>>(raid_boss_name: S, tweet_id: u64, created: u64) -> String {
   format!(
-    "{}:{}:{}.{}",
+    "{}:{}:{}.{}.{}",
     GBF_PREFIX,
     PERSISTENCE_KEY_WORD,
     raid_boss_name.into(),
-    tweet_id
+    tweet_id,
+    created
   )
 }
 
@@ -235,8 +236,8 @@ mod tests {
 
   #[test]
   fn test_gbf_persistence_raid_tweet_key() {
-    let key = gbf_persistence_raid_tweet_key("Lv200 アーカーシャ", 1234567890);
-    assert_eq!("gbf:persistence:Lv200 アーカーシャ.1234567890", key);
+    let key = gbf_persistence_raid_tweet_key("Lv200 アーカーシャ", 1234567890, 12345678909999);
+    assert_eq!("gbf:persistence:Lv200 アーカーシャ.1234567890.12345678909999", key);
   }
 
   #[test]

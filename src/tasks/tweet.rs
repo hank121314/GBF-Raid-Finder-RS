@@ -194,7 +194,7 @@ impl TweetActor {
         tokio::spawn(async move {
           redis
             .set_protobuf(
-              gbf_persistence_raid_tweet_key(raid_tweet.get_boss_name(), raid_tweet.tweet_id),
+              gbf_persistence_raid_tweet_key(raid_tweet.get_boss_name(), raid_tweet.tweet_id, raid_tweet.created),
               raid_tweet,
               TWEET_PERSISTENCE_ONLY_2_HOURS_TTL,
             )
@@ -281,6 +281,7 @@ impl TweetActorHandle {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::env;
   use crate::{
     models::{Entity, Language, Media, User},
     resources::redis::BOSS_EXPIRE_IN_30_DAYS_TTL,
@@ -320,14 +321,15 @@ mod tests {
         profile_image_url_https: "".to_string(),
       },
     };
+    static ref REDIS_URL: String  = env::var("REDIS_URL").unwrap();
     static ref JP_RAID_BOSS_RAW: RaidBossRaw = RaidBossRaw::with_args("Lv150 プロトバハムート", 150, "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg", Language::Japanese);
     static ref EN_RAID_BOSS_RAW: RaidBossRaw = RaidBossRaw::with_args("Lvl 150 Proto Bahamut", 150, "https://pbs.twimg.com/media/CfqZ-YtVAAAt5qd.jpg", Language::English);
   }
 
   #[tokio::test]
   async fn test_jp_tweet_actor_translation() -> Result<()> {
-    let singleton_redis = Redis::new("redis://127.0.0.1/")?;
-    let redis = Arc::new(singleton_redis);
+    let redis = Redis::new(REDIS_URL.clone())?;
+    let redis = Arc::new(redis);
     let map: HashMap<String, String> = HashMap::new();
     redis
       .set_protobuf(
@@ -345,7 +347,7 @@ mod tests {
       .await?;
     let actor = TweetActorHandle::new(redis, map);
     let (raid_boss_raw, _raid_tweet) = actor.parse_tweet(JP_TWEET.clone()).await.unwrap();
-    assert_eq!(actor.translate_boss_name(raid_boss_raw.clone()).await, None);
+    assert_eq!(actor.translate_boss_name(raid_boss_raw.clone()).await, TranslatorResult::Pending);
     let mut max_retry = 5;
     let mut translated_name = String::from("");
     while max_retry != 0 {
@@ -367,8 +369,8 @@ mod tests {
 
   #[tokio::test]
   async fn test_jp_tweet_actor_already_translated() -> Result<()> {
-    let singleton_redis = Redis::new("redis://127.0.0.1/")?;
-    let redis = Arc::new(singleton_redis);
+    let redis = Redis::new(REDIS_URL.clone())?;
+    let redis = Arc::new(redis);
     let mut map: HashMap<String, String> = HashMap::new();
     map.insert("Lv150 プロトバハムート".into(), "Lvl 150 Proto Bahamut".into());
     map.insert("Lvl 150 Proto Bahamut".into(), "Lv150 プロトバハムート".into());
@@ -387,8 +389,8 @@ mod tests {
 
   #[tokio::test]
   async fn test_en_tweet_already_translated() -> Result<()> {
-    let singleton_redis = Redis::new("redis://127.0.0.1/")?;
-    let redis = Arc::new(singleton_redis);
+    let redis = Redis::new(REDIS_URL.clone())?;
+    let redis = Arc::new(redis);
     let mut map: HashMap<String, String> = HashMap::new();
     map.insert("Lv150 プロトバハムート".into(), "Lvl 150 Proto Bahamut".into());
     map.insert("Lvl 150 Proto Bahamut".into(), "Lv150 プロトバハムート".into());
