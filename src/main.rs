@@ -25,20 +25,23 @@ use crate::{
 use futures::{FutureExt, TryStreamExt};
 use futures_retry::{FutureRetry, RetryPolicy};
 use log::{error as log_error, info};
-use std::{collections::HashMap, env, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
 
 pub type FinderClients = Arc<RwLock<HashMap<String, FinderClient>>>;
 pub type Result<T, E = error::Error> = std::result::Result<T, E>;
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 8)]
+#[tokio::main]
 pub async fn main() -> Result<()> {
   let config = Config::new()?;
 
   logger::create_logger(config.log_path.as_str(), "raid-finder-stream", 3)?;
 
-  let redis_url = env::var("REDIS_URL").map_err(|_| error::Error::RedisURLNotFound)?;
+  // Create redis client
+  let redis = Redis::new(config.redis_url.as_str())?;
+
+  let redis = Arc::new(redis);
 
   // Create twitter filter stream client
   let filter_stream_client = FilterStreamClient::new(
@@ -46,10 +49,6 @@ pub async fn main() -> Result<()> {
     vec!["参加者募集！", ":参戦ID", "I need backup!", ":Battle ID"],
     "true",
   );
-
-  let redis = Redis::new(redis_url)?;
-
-  let redis = Arc::new(redis);
 
   // Initialize translator map with redis keys `gbf:translator:*`
   let translator_map = get_translator_map(&redis).await.unwrap_or_else(|_| HashMap::new());
