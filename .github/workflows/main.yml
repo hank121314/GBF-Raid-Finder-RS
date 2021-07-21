@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  cargo:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: supercharge/redis-github-action@1.2.0
+        with:
+          redis-version: 6
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+      - name: test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: -- --test-threads 1
+        env:
+          REDIS_URL: redis://127.0.0.1
