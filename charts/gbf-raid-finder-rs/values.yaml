@@ -1,0 +1,101 @@
+# Default values for gbf-raid-finder-rs.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+progressDeadlineSeconds: 60
+revisionHistoryLimit: 10
+
+strategy:
+  rollingUpdate: 
+    maxSurge: 1
+    maxUnavailable: 1
+  type: RollingUpdate
+
+environments:
+  - name: GBF_RAID_FINDER_LOG_PATH
+    value: stdout
+  - name: REDIS_URL
+    value: ""
+  - name: TWITTER_API_KEY
+    value: ""
+  - name: TWITTER_API_SECRET_KEY
+    value: ""
+  - name: TWITTER_ACCESS_TOKEN
+    value: ""
+  - name: TWITTER_ACCESS_TOKEN_SECRET
+    value: ""
+
+image:
+  repository: hank121314/gbf-raid-finder-rs
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  targetPort: 50051  
+  port: 50051
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    kubernetes.io/ingress.class: public
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "POST"
+    cert-manager.io/issuer: origin-ca-prod
+    cert-manager.io/issuer-kind: OriginIssuer
+    cert-manager.io/issuer-group: cert-manager.k8s.cloudflare.com
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   memory: 1.5Gi
+  # requests:
+  #   memory: 200Mi
+
+autoscaling:
+  enabled: false
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
