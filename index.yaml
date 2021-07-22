@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  gbf-raid-finder-rs:
+  - apiVersion: v2
+    appVersion: v1.0.0
+    created: "2021-07-22T08:06:35.721225641Z"
+    description: GBF Raid Finder Rust Helm chart for kubernetes
+    digest: 1931514e8c1329c1b49d9c22890c801c51c4181a4468eacc3cf770913f445977
+    name: gbf-raid-finder-rs
+    type: application
+    urls:
+    - https://hank121314.github.io/GBF-Raid-Finder-RS/gbf-raid-finder-rs-1.0.0.tgz
+    version: 1.0.0
+generated: "2021-07-22T08:06:35.72014224Z"
