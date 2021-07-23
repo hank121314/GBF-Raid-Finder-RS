@@ -13,7 +13,7 @@ impl Redis {
   where
     S: Into<String>,
   {
-    let client = redis::Client::open(address.into()).map_err(|error| error::Error::RedisConnectionError { error })?;
+    let client = redis::Client::open(address.into()).map_err(|error| error::Error::RedisConnection { error })?;
     Ok(Redis { client })
   }
 
@@ -26,13 +26,13 @@ impl Redis {
       .client
       .get_tokio_connection()
       .await
-      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
     let bytes: Vec<u8> = connection
       .get(key.into())
       .await
-      .map_err(|error| error::Error::RedisGetValueError { error })?;
+      .map_err(|error| error::Error::RedisGetValue { error })?;
 
-    T::decode(&mut bytes.as_slice()).map_err(|error| error::Error::ProtobufParseError { error })
+    T::decode(&mut bytes.as_slice()).map_err(|error| error::Error::ProtobufParse { error })
   }
 
   pub async fn mget_protobuf_raw<V, S>(&self, keys: V) -> Result<Vec<Vec<u8>>>
@@ -50,12 +50,12 @@ impl Redis {
       .client
       .get_tokio_connection()
       .await
-      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
 
     let bytes: Vec<Vec<u8>> = connection
       .get(redis_keys)
       .await
-      .map_err(|error| error::Error::RedisGetValueError { error })?;
+      .map_err(|error| error::Error::RedisGetValue { error })?;
 
     Ok(bytes)
   }
@@ -76,16 +76,16 @@ impl Redis {
       .client
       .get_tokio_connection()
       .await
-      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
 
     let bytes: Vec<Vec<u8>> = connection
       .get(redis_keys)
       .await
-      .map_err(|error| error::Error::RedisGetValueError { error })?;
+      .map_err(|error| error::Error::RedisGetValue { error })?;
 
     bytes
       .into_iter()
-      .map(|ref byte| T::decode(&mut byte.as_slice()).map_err(|error| error::Error::ProtobufParseError { error }))
+      .map(|ref byte| T::decode(&mut byte.as_slice()).map_err(|error| error::Error::ProtobufParse { error }))
       .collect()
   }
 
@@ -98,12 +98,12 @@ impl Redis {
       .client
       .get_tokio_connection()
       .await
-      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
 
     connection
       .get(keys.into_iter().map(|k| k.into()).collect::<Vec<_>>())
       .await
-      .map_err(|error| error::Error::RedisGetValueError { error })
+      .map_err(|error| error::Error::RedisGetValue { error })
   }
 
   pub async fn get_string<S, I>(&self, key: I) -> Result<String>
@@ -115,12 +115,12 @@ impl Redis {
       .client
       .get_tokio_connection()
       .await
-      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
 
     connection
       .get(key.into())
       .await
-      .map_err(|error| error::Error::RedisGetValueError { error })
+      .map_err(|error| error::Error::RedisGetValue { error })
   }
 
   pub async fn set_protobuf<S, T, U>(&self, key: S, value: T, ttl: U) -> Result<()>
@@ -130,29 +130,29 @@ impl Redis {
     U: TryInto<usize> + Copy,
   {
     let redis_key = key.into();
-    let redis_ttl = ttl.try_into().map_err(|_| error::Error::U32ToUSizeError)?;
+    let redis_ttl = ttl.try_into().map_err(|_| error::Error::U32ToUSize)?;
 
     let mut connection = self
       .client
       .get_tokio_connection()
       .await
-      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
     let mut bytes = Vec::new();
 
     value
       .encode(&mut bytes)
-      .map_err(|error| error::Error::ProtobufWriteError { error })?;
+      .map_err(|error| error::Error::ProtobufWrite { error })?;
 
     connection
       .set(&redis_key, bytes)
       .await
-      .map_err(|error| error::Error::RedisSetValueError { error })?;
+      .map_err(|error| error::Error::RedisSetValue { error })?;
 
     if redis_ttl != 0 {
       connection
         .expire(&redis_key, redis_ttl)
         .await
-        .map_err(|error| error::Error::RedisExpireError { error })?;
+        .map_err(|error| error::Error::RedisExpire { error })?;
     }
 
     Ok(())
@@ -168,7 +168,7 @@ impl Redis {
       .client
       .get_tokio_connection()
       .await
-      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
 
     connection
       .set_multiple(
@@ -179,7 +179,7 @@ impl Redis {
           .as_slice(),
       )
       .await
-      .map_err(|error| error::Error::RedisSetValueError { error })?;
+      .map_err(|error| error::Error::RedisSetValue { error })?;
 
     Ok(())
   }
@@ -194,11 +194,11 @@ impl Redis {
       .client
       .get_tokio_connection()
       .await
-      .map_err(|error| error::Error::RedisGetConnectionError { error })?;
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
 
     connection
       .keys::<String, Vec<String>>(redis_key)
       .await
-      .map_err(|error| error::Error::RedisGetKeysError { error })
+      .map_err(|error| error::Error::RedisGetKeys { error })
   }
 }

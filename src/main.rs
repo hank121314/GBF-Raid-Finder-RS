@@ -88,29 +88,29 @@ pub async fn main() -> Result<()> {
           Ok(raid_tweet) => {
             tasks::websocket::sending_message_to_websocket_client(raid_tweet, finder_clients.clone());
           }
-          // Only if we get StreamUnexpectedError/StreamEOFError/BadResponseError should reconnect the stream.
+          // Only if we get StreamUnexpected/StreamEOF/BadResponse should reconnect the stream.
           // Otherwise we will skip the tweet.
           Err(stream_error) => match stream_error {
-            error::Error::StreamUnexpectedError => return Err(stream_error),
-            error::Error::StreamEOFError => return Err(stream_error),
-            error::Error::BadResponseError => return Err(stream_error),
+            error::Error::StreamUnexpected => return Err(stream_error),
+            error::Error::StreamEOF => return Err(stream_error),
+            error::Error::BadResponse => return Err(stream_error),
             _ => continue,
           },
         };
       }
 
-      Err::<(), error::Error>(error::Error::StreamUnexpectedError)
+      Err::<(), error::Error>(error::Error::StreamUnexpected)
     },
     |e: error::Error| match e {
-      error::Error::StreamUnexpectedError => {
+      error::Error::StreamUnexpected => {
         info!("Get unexpected error while streaming tweets will restart in 5 second.");
         RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
       }
-      error::Error::BadResponseError => {
+      error::Error::BadResponse => {
         info!("Get bad response when connecting to twitter stream api will restart in 5 second.");
         RetryPolicy::WaitRetry(std::time::Duration::from_secs(5))
       }
-      error::Error::StreamEOFError => {
+      error::Error::StreamEOF => {
         info!("Get EOF in twitter stream api will restart in 1 second.");
         RetryPolicy::WaitRetry(std::time::Duration::from_secs(1))
       }

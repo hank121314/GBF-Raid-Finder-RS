@@ -174,7 +174,7 @@ impl TweetActor {
         let translated_tweet = match language {
           // Only English boss name should be converted into Japanese
           Language::English => match translator_result {
-            TranslatorResult::Pending => Err(error::Error::CannotTranslateError {
+            TranslatorResult::Pending => Err(error::Error::CannotTranslate {
               name: raid_boss_raw.get_boss_name().into(),
             }),
             TranslatorResult::Success {

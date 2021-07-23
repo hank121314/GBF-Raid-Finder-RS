@@ -224,7 +224,7 @@ impl RaidTweet {
 
     self
       .encode(&mut bytes)
-      .map_err(|error| error::Error::ProtobufWriteError { error })?;
+      .map_err(|error| error::Error::ProtobufWrite { error })?;
 
     Ok(bytes)
   }

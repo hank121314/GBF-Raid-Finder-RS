@@ -51,7 +51,7 @@ impl StatusParser {
     raid_boss.set_level(level);
     raid_boss.set_language(language.to_string());
 
-    match Self::get_media_image_by_tweet(&tweet) {
+    match Self::get_media_image_by_tweet(tweet) {
       Some(image) => {
         raid_boss.set_image(image);
         let created = tweet.timestamp_ms.parse::<u64>().unwrap();

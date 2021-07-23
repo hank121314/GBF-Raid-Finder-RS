@@ -85,14 +85,14 @@ impl Comparison {
   {
     let response = reqwest::get(url.into())
       .await
-      .map_err(|error| error::Error::ImageCannotGetError { error })?;
+      .map_err(|error| error::Error::ImageCannotGet { error })?;
     let buffer = response
       .bytes()
       .await
-      .map_err(|error| error::Error::BytesParseImageError { error })?;
+      .map_err(|error| error::Error::BytesParseImage { error })?;
 
     let img =
-      load_image::load_image_data(&buffer, false).map_err(|error| error::Error::ImageParseBytesError { error })?;
+      load_image::load_image_data(&buffer, false).map_err(|error| error::Error::ImageParseBytes { error })?;
 
     self.load_image_to_image_data(img)
   }
@@ -141,7 +141,7 @@ impl Comparison {
           .create_image(&Img::new(bitmap.to_rgbaplu(), img.width, img.height * 3 / 4))
       }
     }
-    .ok_or(error::Error::ImageToImageDataError)
+    .ok_or(error::Error::ImageToImageData)
   }
 }
 

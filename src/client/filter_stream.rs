@@ -56,7 +56,7 @@ where
         Poll::Ready(Ok(res)) => {
           let status_code = res.status();
           if !status_code.is_success() {
-            return Poll::Ready(Some(Err(error::Error::BadResponseError)));
+            return Poll::Ready(Some(Err(error::Error::BadResponse)));
           }
 
           info!("Connected to twitter streaming api!");
@@ -76,20 +76,20 @@ where
         Poll::Ready(Some(Err(_))) => {
           self.body = Some(body);
 
-          Poll::Ready(Some(Err(error::Error::StreamEOFError)))
+          Poll::Ready(Some(Err(error::Error::StreamEOF)))
         }
         Poll::Ready(Some(Ok(chunk))) => {
           self.body = Some(body);
           let string =
-            String::from_utf8(chunk.to_vec()).map_err(|error| error::Error::StringParseFromBytesError { error })?;
+            String::from_utf8(chunk.to_vec()).map_err(|error| error::Error::StringParseFromBytes { error })?;
           let data =
-            serde_json::from_str::<T>(string.as_ref()).map_err(|error| error::Error::JSONParseError { error })?;
+            serde_json::from_str::<T>(string.as_ref()).map_err(|error| error::Error::JSONParse { error })?;
           self.tweet = Some(data);
           if let Some(tweet) = self.tweet.take() {
             return Poll::Ready(Some(Ok(tweet)));
           }
 
-          Poll::Ready(Some(Err(error::Error::StreamEOFError)))
+          Poll::Ready(Some(Err(error::Error::StreamEOF)))
         }
       };
     } else {
