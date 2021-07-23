@@ -1,6 +1,6 @@
 [package]
 name = "raid-finder"
-version = "0.1.0"
+version = "1.0.2"
 authors = ["Hank Chen <hank121314@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -12,7 +12,7 @@ snafu = "0.6.10"
 serde = { version = "1.0.125", features = ["derive"] }
 serde_json = "1.0"
 # Raw data for raid boss and tweets
-prost = "0.7.0"
+prost = "0.8.0"
 bytes = "1.0.1"
 # Async event loop
 tokio = { version = "1.5", features = ["rt", "rt-multi-thread", "macros", "net", "time", "sync"] }
@@ -44,7 +44,3 @@ hyper-tls = "0.5.0"
 reqwest = { version = "0.11.4", features = ["stream", "json"] }
 # Database
 redis = { git = "https://github.com/hank121314/redis-rs.git", branch = "master", features = ["tokio-comp"] }
-
-[build-dependencies]
-prost-build = "0.7.0"
-tonic-build = "0.4.2"
