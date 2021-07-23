@@ -83,6 +83,8 @@ pub enum Error {
   TokioTranslatorRuntimeError,
   #[snafu(display("Cannot translate given name, name: {}", name))]
   CannotTranslateError { name: String },
+  #[snafu(display("Actor task has been killed, error: {}", error))]
+  ActorTaskBeenKilled { error: tokio::sync::oneshot::error::RecvError },
   #[snafu(display("String parse from bytes error, error: {}", error))]
   StringParseFromBytesError { error: std::string::FromUtf8Error },
   #[snafu(display("Future already complete without streaming"))]

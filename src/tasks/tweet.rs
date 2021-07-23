@@ -13,13 +13,14 @@ use crate::{
   Result,
 };
 
+use futures::TryFutureExt;
 use log::{debug, error};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
 enum TweetActorMessage {
   ///
-  /// If the tweet is came from Granblue Fantasy source using 
+  /// If the tweet is came from Granblue Fantasy source using
   /// StatusParser to parse the tweet to raid_tweet and raid_boss_raw.
   /// If it is from others source throw an CannotParseTweet error.
   ///
@@ -38,14 +39,14 @@ enum TweetActorMessage {
   ///
   /// # Arguments
   /// * `raid_boss_raw` - the raid_boss which we want to translate.
-  /// 
+  ///
   TranslateBossName {
     raid_boss_raw: RaidBossRaw,
     respond_to: oneshot::Sender<TranslatorResult>,
   },
   ///
   /// Translate the english boss name raid_tweet to japanese name.
-  /// 
+  ///
   /// # Arguments
   /// * `raid_boss_raw` - use to show the error message of boss name.
   /// * `raid_tweet` - raid tweet which should be translated.
@@ -58,7 +59,7 @@ enum TweetActorMessage {
   },
   ///
   /// Persist the raid tweet into redis.
-  /// 
+  ///
   /// # Arguments
   /// * `raid_tweet` - raid_tweet which should be persisted.
   PersistRaidTweet {
@@ -79,6 +80,14 @@ impl TweetActor {
       receiver,
       redis,
       map: Arc::new(RwLock::new(map)),
+    }
+  }
+
+  async fn run(&mut self) {
+    while let Some(msg) = self.receiver.recv().await {
+      if let Err(error) = self.handle_message(msg).await {
+        error!("Error encounter during actor, error: {:?}", error);
+      }
     }
   }
 
@@ -209,14 +218,6 @@ impl TweetActor {
   }
 }
 
-async fn run_my_actor(mut actor: TweetActor) {
-  while let Some(msg) = actor.receiver.recv().await {
-    if let Err(error) = actor.handle_message(msg).await {
-      error!("Error encounter during actor, error: {:?}", error);
-    }
-  }
-}
-
 pub struct TweetActorHandle {
   sender: mpsc::Sender<TweetActorMessage>,
 }
@@ -224,8 +225,14 @@ pub struct TweetActorHandle {
 impl TweetActorHandle {
   pub fn new(redis: Arc<Redis>, map: HashMap<String, String>) -> Self {
     let (sender, receiver) = mpsc::channel(1024);
-    let actor = TweetActor::new(receiver, redis, map);
-    tokio::spawn(run_my_actor(actor));
+    let mut actor = TweetActor::new(receiver, redis, map);
+    let _ = tokio::spawn(async move { actor.run().await }).map_err(|e| {
+      if e.is_panic() {
+        error!("Actor task might get panic!, error: {}", e);
+      } else if e.is_cancelled() {
+        error!("Actor task might get cancelled, error: {}", e);
+      }
+    });
 
     Self { sender }
   }
@@ -237,17 +244,25 @@ impl TweetActorHandle {
       respond_to: send,
     };
     let _ = self.sender.send(msg).await;
-    recv.await.expect("Actor task has been killed")
+    let result = recv.await;
+    match result {
+      Ok(result) => result,
+      Err(e) => Err(error::Error::ActorTaskBeenKilled { error: e }),
+    }
   }
 
-  pub async fn translate_boss_name(&self, raid_boss_raw: RaidBossRaw) -> TranslatorResult {
+  pub async fn translate_boss_name(&self, raid_boss_raw: RaidBossRaw) -> Result<TranslatorResult> {
     let (send, recv) = oneshot::channel();
     let msg = TweetActorMessage::TranslateBossName {
       raid_boss_raw,
       respond_to: send,
     };
     let _ = self.sender.send(msg).await;
-    recv.await.expect("Actor task has been killed")
+    let result = recv.await;
+    match result {
+      Ok(result) => Ok(result),
+      Err(e) => Err(error::Error::ActorTaskBeenKilled { error: e }),
+    }
   }
 
   pub async fn translate_tweet(
@@ -264,7 +279,11 @@ impl TweetActorHandle {
       respond_to: send,
     };
     let _ = self.sender.send(msg).await;
-    recv.await.expect("Actor task has been killed")
+    let result = recv.await;
+    match result {
+      Ok(result) => result,
+      Err(e) => Err(error::Error::ActorTaskBeenKilled { error: e }),
+    }
   }
 
   pub async fn persist_raid_tweet(&self, raid_tweet: RaidTweet) -> Result<RaidTweet> {
@@ -274,19 +293,23 @@ impl TweetActorHandle {
       respond_to: send,
     };
     let _ = self.sender.send(msg).await;
-    recv.await.expect("Actor task has been killed")
+    let result = recv.await;
+    match result {
+      Ok(result) => result,
+      Err(e) => Err(error::Error::ActorTaskBeenKilled { error: e }),
+    }
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::env;
   use crate::{
     models::{Entity, Language, Media, User},
     resources::redis::BOSS_EXPIRE_IN_30_DAYS_TTL,
     Result,
   };
+  use std::env;
 
   lazy_static::lazy_static! {
     static ref JP_TWEET: Tweet = Tweet {
@@ -347,13 +370,16 @@ mod tests {
       .await?;
     let actor = TweetActorHandle::new(redis, map);
     let (raid_boss_raw, _raid_tweet) = actor.parse_tweet(JP_TWEET.clone()).await.unwrap();
-    assert_eq!(actor.translate_boss_name(raid_boss_raw.clone()).await, TranslatorResult::Pending);
+    assert_eq!(
+      actor.translate_boss_name(raid_boss_raw.clone()).await.unwrap(),
+      TranslatorResult::Pending
+    );
     let mut max_retry = 5;
     let mut translated_name = String::from("");
     while max_retry != 0 {
       // Sleep 10 seconds to wait for translation task
       tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-      match actor.translate_boss_name(raid_boss_raw.clone()).await {
+      match actor.translate_boss_name(raid_boss_raw.clone()).await.unwrap() {
         TranslatorResult::Pending => {
           max_retry -= 1;
         }
@@ -381,7 +407,7 @@ mod tests {
     assert_eq!(raid_boss_raw.image, "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg");
     assert_eq!(raid_tweet.boss_name, "Lv150 プロトバハムート");
     assert_eq!(raid_tweet.tweet_id, 1390247452125458434);
-    let translated_name = actor.translate_boss_name(raid_boss_raw).await;
+    let translated_name = actor.translate_boss_name(raid_boss_raw).await.unwrap();
     assert_eq!("Lvl 150 Proto Bahamut", translated_name.to_string());
 
     Ok(())
@@ -401,7 +427,7 @@ mod tests {
     assert_eq!(raid_boss_raw.image, "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg");
     assert_eq!(raid_tweet.boss_name, "Lvl 150 Proto Bahamut");
     assert_eq!(raid_tweet.tweet_id, 1390247452125458434);
-    let translated_name = actor.translate_boss_name(raid_boss_raw).await;
+    let translated_name = actor.translate_boss_name(raid_boss_raw).await.unwrap();
     assert_eq!("Lv150 プロトバハムート", translated_name.to_string());
 
     Ok(())

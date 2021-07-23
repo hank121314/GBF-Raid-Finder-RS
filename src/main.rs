@@ -22,7 +22,7 @@ use crate::{
   server::{client::FinderClient, http::create_http_server},
   tasks::tweet::TweetActorHandle,
 };
-use futures::{FutureExt, TryStreamExt};
+use futures::{TryStreamExt, TryFutureExt};
 use futures_retry::{FutureRetry, RetryPolicy};
 use log::{error as log_error, info};
 use std::{collections::HashMap, sync::Arc};
@@ -50,17 +50,15 @@ pub async fn main() -> Result<()> {
     "true",
   );
 
-  // Initialize translator map with redis keys `gbf:translator:*`
-  let translator_map = get_translator_map(&redis).await.unwrap_or_else(|_| HashMap::new());
-
-  // Create tweet handler to consuming incoming stream
-  let tweet_handler = TweetActorHandle::new(redis.clone(), translator_map);
-
   // Create an empty client map
   let finder_clients: FinderClients = Arc::new(RwLock::new(HashMap::new()));
-
   // Create http/ws server
-  create_http_server(redis, finder_clients.clone());
+  create_http_server(redis.clone(), finder_clients.clone());
+
+  // Initialize translator map with redis keys `gbf:translator:*`
+  let translator_map = get_translator_map(&redis).await.unwrap_or_else(|_| HashMap::new());
+  // Create tweet handler to consuming incoming stream
+  let tweet_handler = TweetActorHandle::new(redis, translator_map);
 
   FutureRetry::new(
     || async {
@@ -72,7 +70,7 @@ pub async fn main() -> Result<()> {
         .and_then(|(raid_boss_raw, raid_tweet)| {
           tweet_handler
             .translate_boss_name(raid_boss_raw.clone())
-            .map(|result| Ok((raid_boss_raw, raid_tweet, result)))
+            .and_then(|result| async move { Ok((raid_boss_raw, raid_tweet, result)) })
         })
         .and_then(
           |(raid_boss_raw, raid_tweet, translator_result): (RaidBossRaw, RaidTweet, TranslatorResult)| {
