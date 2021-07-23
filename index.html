@@ -1,0 +1,22 @@
+<h2>Granblue Fantasy Raid Finder Helm repository</h2>
+<img src="https://img.shields.io/badge/License-MIT-green.svg" />
+<img src="https://img.shields.io/badge/PRs-welcome-blue.svg" />
+
+<h3>Installation</h3>
+<p>helm repo add gbf-raid-finder-rs https://hank121314.github.io/GBF-Raid-Finder-RS</p>
+<p>helm repo update</p>
+<p>helm install gbf-raid-finder-rs</p>
+<h4>Note</h4>
+<ul>
+  <li>You have to specify the host config and environments variable with --values</li>
+</ul>
+
+<h3>Environments variables</h3>
+<ul>
+  <li>GBF_RAID_FINDER_LOG_PATH: log path for server log file, default is stdout</li>
+  <li>REDIS_URL: redis connection url</li>
+  <li>TWITTER_API_KEY</li>
+  <li>TWITTER_API_SECRET_KEY</li>
+  <li>TWITTER_ACCESS_TOKEN</li>
+  <li>TWITTER_ACCESS_TOKEN_SECRET</li>
+</ul>
