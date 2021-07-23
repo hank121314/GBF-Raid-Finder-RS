@@ -32,19 +32,19 @@ impl Comparison {
   /// # Examples
   ///
   /// ```
-  /// let origin = RaidBossRaw::with_args(
+  /// let origin = RaidBossRaw::apply_args(
   ///   "アーカーシャ",
   ///   200,
   ///   r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
   ///   Language::Japanese,
   /// );
-  /// let possible_1 = RaidBossRaw::with_args(
+  /// let possible_1 = RaidBossRaw::apply_args(
   ///   "Akasha",
   ///   200,
   ///   r"https://pbs.twimg.com/media/DumtOgzUYAA_GD3.jpg",
   ///   Language::English,
   /// );
-  /// let possible_2 = RaidBossRaw::with_args(
+  /// let possible_2 = RaidBossRaw::apply_args(
   ///   "Wilnas",
   ///   200,
   ///   r"https://pbs.twimg.com/media/Ed52ry_U0AARvyI.jpg",
@@ -152,19 +152,19 @@ mod tests {
 
   #[tokio::test]
   async fn translate_akasha_name() {
-    let origin = RaidBossRaw::with_args(
+    let origin = RaidBossRaw::apply_args(
       "Lv200 アーカーシャ",
       200,
       r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
       Language::Japanese,
     );
-    let possible_1 = RaidBossRaw::with_args(
+    let possible_1 = RaidBossRaw::apply_args(
       "Lvl 200 Wilnas",
       200,
       r"https://pbs.twimg.com/media/Ed52ry_U0AARvyI.jpg",
       Language::English,
     );
-    let possible_2 = RaidBossRaw::with_args(
+    let possible_2 = RaidBossRaw::apply_args(
       "Lvl 200 Akasha",
       200,
       r"https://pbs.twimg.com/media/DumtOgzUYAA_GD3.jpg",
@@ -177,19 +177,19 @@ mod tests {
 
   #[tokio::test]
   async fn translate_medusa_hl_name() {
-    let origin = RaidBossRaw::with_args(
+    let origin = RaidBossRaw::apply_args(
       "Lv120 メドゥーサ",
       120,
       r"https://pbs.twimg.com/media/CYBki-CUkAQVWW_.jpg",
       Language::Japanese,
     );
-    let possible_1 = RaidBossRaw::with_args(
+    let possible_1 = RaidBossRaw::apply_args(
       "Lvl 120 Medusa",
       120,
       r"https://pbs.twimg.com/media/CfqZlIcVIAAp8e_.jpg",
       Language::English,
     );
-    let possible_2 = RaidBossRaw::with_args(
+    let possible_2 = RaidBossRaw::apply_args(
       "Lvl 120 Metatron",
       120,
       r"https://pbs.twimg.com/media/DZVlpmXU8AEbF6G.jpg",

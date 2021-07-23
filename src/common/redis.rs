@@ -20,7 +20,7 @@ use std::{collections::HashMap, str::FromStr};
 /// # Example
 ///
 /// ```
-/// let raid_boss_raw = RaidBossRaw::with_args(
+/// let raid_boss_raw = RaidBossRaw::apply_args(
 ///   "Lv200 アーカーシャ",
 ///   200,
 ///   r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
@@ -78,7 +78,7 @@ pub fn gbf_raid_boss_keys(level: u32) -> String {
 /// # Example:
 ///
 /// ```
-/// let raid_boss = RaidBoss::with_args(
+/// let raid_boss = RaidBoss::apply_args(
 ///   "Lvl 200 Akasha",
 ///   "Lv200 アーカーシャ",
 ///   200,
@@ -157,7 +157,7 @@ pub fn gbf_persistence_raid_tweet_key<S: Into<String>>(raid_boss_name: S, tweet_
 /// # Example
 ///
 /// ```
-/// let raid_boss_raw = RaidBossRaw::with_args(
+/// let raid_boss_raw = RaidBossRaw::apply_args(
 ///   "Lv200 アーカーシャ",
 ///   200,
 ///   r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
@@ -196,7 +196,7 @@ mod tests {
 
   #[test]
   fn test_gbf_raid_boss_raw_key() {
-    let raid_boss_raw = RaidBossRaw::with_args(
+    let raid_boss_raw = RaidBossRaw::apply_args(
       "Lv200 アーカーシャ",
       200,
       r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
@@ -216,7 +216,7 @@ mod tests {
 
   #[test]
   fn test_gbf_raid_boss_key() {
-    let raid_boss = RaidBoss::with_args(
+    let raid_boss = RaidBoss::apply_args(
       "Lvl 200 Akasha",
       "Lv200 アーカーシャ",
       200,
@@ -242,7 +242,7 @@ mod tests {
 
   #[test]
   fn test_gbf_get_possible_boss_name() {
-    let raid_boss_raw = RaidBossRaw::with_args(
+    let raid_boss_raw = RaidBossRaw::apply_args(
       "Lv200 アーカーシャ",
       200,
       r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",

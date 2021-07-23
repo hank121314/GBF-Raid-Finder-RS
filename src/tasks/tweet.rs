@@ -345,8 +345,8 @@ mod tests {
       },
     };
     static ref REDIS_URL: String  = env::var("REDIS_URL").unwrap();
-    static ref JP_RAID_BOSS_RAW: RaidBossRaw = RaidBossRaw::with_args("Lv150 プロトバハムート", 150, "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg", Language::Japanese);
-    static ref EN_RAID_BOSS_RAW: RaidBossRaw = RaidBossRaw::with_args("Lvl 150 Proto Bahamut", 150, "https://pbs.twimg.com/media/CfqZ-YtVAAAt5qd.jpg", Language::English);
+    static ref JP_RAID_BOSS_RAW: RaidBossRaw = RaidBossRaw::apply_args("Lv150 プロトバハムート", 150, "https://pbs.twimg.com/media/CdL4WyxUYAIXPb8.jpg", Language::Japanese);
+    static ref EN_RAID_BOSS_RAW: RaidBossRaw = RaidBossRaw::apply_args("Lvl 150 Proto Bahamut", 150, "https://pbs.twimg.com/media/CfqZ-YtVAAAt5qd.jpg", Language::English);
   }
 
   #[tokio::test]

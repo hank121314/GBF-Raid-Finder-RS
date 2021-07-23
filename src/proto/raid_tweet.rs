@@ -28,7 +28,7 @@ impl RaidTweet {
     ::std::default::Default::default()
   }
 
-  pub fn with_args<S1, S2, S3, S4, S5>(
+  pub fn apply_args<S1, S2, S3, S4, S5>(
     tweet_id: u64,
     screen_name: S1,
     created: u64,

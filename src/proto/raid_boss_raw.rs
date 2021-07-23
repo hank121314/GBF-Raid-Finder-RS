@@ -18,7 +18,7 @@ impl RaidBossRaw {
     ::std::default::Default::default()
   }
 
-  pub fn with_args<S1, S2>(boss_name: S1, level: i32, image: S2, language: Language) -> Self where S1: Into<String>, S2: Into<String> {
+  pub fn apply_args<S1, S2>(boss_name: S1, level: i32, image: S2, language: Language) -> Self where S1: Into<String>, S2: Into<String> {
     Self {
       boss_name: boss_name.into(),
       level,

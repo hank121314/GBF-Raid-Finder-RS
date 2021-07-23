@@ -55,7 +55,7 @@ impl StatusParser {
       Some(image) => {
         raid_boss.set_image(image);
         let created = tweet.timestamp_ms.parse::<u64>().unwrap();
-        let raid_tweet = RaidTweet::with_args(
+        let raid_tweet = RaidTweet::apply_args(
           tweet.id,
           &tweet.user.screen_name,
           created,

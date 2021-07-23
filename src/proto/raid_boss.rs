@@ -16,7 +16,7 @@ impl RaidBoss {
     ::std::default::Default::default()
   }
 
-  pub fn with_args<S1, S2, S3>(en_name: S1, jp_name: S2, level: i32, image: S3) -> Self
+  pub fn apply_args<S1, S2, S3>(en_name: S1, jp_name: S2, level: i32, image: S3) -> Self
   where
     S1: Into<String>,
     S2: Into<String>,
