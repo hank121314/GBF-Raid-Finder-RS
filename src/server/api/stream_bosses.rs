@@ -1,4 +1,4 @@
-use crate::{resources::ws, server::client::FinderClient, server::state::AppState};
+use crate::{error, resources::ws, server::client::FinderClient, server::state::AppState};
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use log::{error, info};
@@ -12,11 +12,18 @@ pub struct StreamRequest {
   pub boss_names: Vec<String>,
 }
 
+enum WebsocketMsgType {
+  Request(String),
+  Json(StreamRequest),
+  Pong,
+  NoneString,
+}
+
 pub async fn stream_bosses(ws: warp::ws::WebSocket, app_state: AppState) {
   // Generate client uuid
   let client_id = nanoid::nanoid!();
   // Get client transportation
-  let (client_tx, mut client_rx) = ws.split();
+  let (client_tx, client_rx) = ws.split();
   // Create a channel between ws and tweet stream
   let (tx, rx) = mpsc::unbounded_channel();
   // Create finder client and inset it into global state
@@ -29,37 +36,66 @@ pub async fn stream_bosses(ws: warp::ws::WebSocket, app_state: AppState) {
   // Create a new thread to sending message to client
   sending_message(client_id.clone(), client_tx.clone(), receiver, app_state.clone());
   // Consuming incoming message
-  while let Some(result) = client_rx.next().await {
-    // Once client did not send clarify message, it will disconnect.
-    let msg = if let Ok(msg) = result {
-      match msg.to_str() {
-        Ok(msg) => msg.to_owned(),
-        Err(_) => {
+  let stream = client_rx
+    .then(|result| async {
+      match result {
+        Ok(msg) => match msg.to_str() {
+          Ok(msg) => match msg {
+            ws::PING => Ok(WebsocketMsgType::Pong),
+            msg => Ok(WebsocketMsgType::Request(msg.to_owned())),
+          },
+          Err(_) => match msg.is_close() {
+            true => Err(error::Error::WebsocketsClientClose),
+            false => Ok(WebsocketMsgType::NoneString),
+          },
+        },
+        Err(error) => Err(error::Error::WebsocketsClientError { error }),
+      }
+    })
+    .then(|result| async {
+      match result {
+        Ok(msg) => match msg {
+          WebsocketMsgType::Request(ref s) => match serde_json::from_str::<StreamRequest>(s) {
+            Ok(json) => Ok(WebsocketMsgType::Json(json)),
+            Err(_) => Ok(WebsocketMsgType::Request(s.to_owned())),
+          },
+          all => Ok(all),
+        },
+        Err(e) => Err(e),
+      }
+    });
+  tokio::pin!(stream);
+  while let Some(result) = stream.next().await {
+    if let Ok(msg) = result {
+      match msg {
+        WebsocketMsgType::Json(json) => {
+          let mut clients = app_state.clients.write().await;
+          if let Some(client) = clients.get_mut(&client_id) {
+            (*client).boss_names = json.boss_names;
+          }
+        }
+        WebsocketMsgType::Pong => {
+          let pong_result = client_tx.lock().await.send(warp::ws::Message::text(ws::PONG)).await;
+          // When server is unable to sent a pong pack to client, it might be disconnected.
+          if pong_result.is_err() {
+            app_state.clients.write().await.remove(client_id.as_str());
+            info!("Client: {} gone!", client_id);
+            break;
+          }
+        }
+        WebsocketMsgType::Request(s) => {
+          info!("Client: {}, cannot convert message to string, {}", client_id, s);
+          continue;
+        }
+        WebsocketMsgType::NoneString => {
           error!("Client: {}, websocket error: message should be string!", client_id);
           continue;
         }
       }
     } else {
-      continue;
-    };
-    match msg.as_str() {
-      ws::PING => {
-        let pong_result = client_tx.lock().await.send(warp::ws::Message::text(ws::PONG)).await;
-        // When server is unable to sent a pong pack to client, it might be disconnected.
-        if pong_result.is_err() {
-          app_state.clients.write().await.remove(client_id.as_str());
-          info!("Client: {} gone!", client_id);
-          break;
-        }
-      }
-      msg => {
-        if let Ok(request) = serde_json::from_str::<StreamRequest>(msg) {
-          let mut clients = app_state.clients.write().await;
-          if let Some(client) = clients.get_mut(&client_id) {
-            (*client).boss_names = request.boss_names;
-          }
-        }
-      }
+      app_state.clients.write().await.remove(client_id.as_str());
+      info!("Client: {} gone!", client_id);
+      break;
     }
   }
 }
@@ -84,15 +120,24 @@ fn sending_message(
         Ok(message) => client_tx.lock().await.send(message).await,
         Err(err) => Err(err),
       };
-      if result.is_err() {
-        app_state.clients.write().await.remove(client_id.as_str());
-        info!("Client: {} gone!", client_id);
-        return Err(());
-      }
 
-      Ok(())
+      match result {
+        Ok(_) => Ok(()),
+        Err(error) => {
+          app_state.clients.write().await.remove(client_id.as_str());
+          info!("Client: {} gone!", client_id);
+          Err(error::Error::WebsocketsClientError { error })
+        }
+      }
     });
     tokio::pin!(stream);
-    while stream.next().await.is_some() {}
+    while let Some(result) = stream.next().await {
+      if result.is_err() {
+        break;
+      }
+    }
+
+    info!("Client {} sending message stream end.", client_id);
+    Ok::<(), error::Error>(())
   });
 }
