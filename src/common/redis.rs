@@ -67,13 +67,12 @@ pub fn gbf_raid_boss_keys(level: u32) -> String {
   format!("{}:{}:{}.*", GBF_PREFIX, BOSS_KEY_WORD, level_match)
 }
 
-/// Get translated boss list with its level and language
+/// Get translated boss with its level and language
 ///
 /// # Arguments
 ///
 /// * `lang`: Language we want to take
 /// * `raid_boss`: Raid boss information
-///
 ///
 /// # Example:
 ///
@@ -101,6 +100,53 @@ pub fn gbf_raid_boss_key(lang: Language, raid_boss: &RaidBoss) -> String {
       format!(
         "{}:{}:{}.{}",
         GBF_PREFIX, BOSS_KEY_WORD, raid_boss.level, raid_boss.jp_name
+      )
+    }
+  }
+}
+
+/// Get raid boss jp name from raid boss raw and translated
+///
+/// # Arguments
+///
+/// * `lang`: Language we want to take
+/// * `raid_boss_raw`: Raid boss raw information
+/// * `translated`: Translated name.
+///
+/// # Example:
+///
+/// ```
+///let raid_boss_raw = RaidBossRaw::apply_args(
+///   "Lv200 アーカーシャ",
+///   200,
+///   r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+///   Language::Japanese,
+/// );
+/// let translated = "Lvl 200 Akasha";
+/// let jp_key = gbf_raid_boss_jp_key_from_raw(Language::Japanese, &raid_boss_raw, translated);
+/// assert_eq!("gbf:boss:200.Lv200 アーカーシャ", jp_key);
+/// let raid_boss_raw = RaidBossRaw::apply_args(
+///   "Lvl 200 Akasha",
+///   200,
+///   r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+///   Language::English,
+/// );
+/// let translated = "Lv200 アーカーシャ";
+/// let jp_key = gbf_raid_boss_jp_key_from_raw(Language::English, &raid_boss_raw, translated);
+/// assert_eq!("gbf:boss:200.Lv200 アーカーシャ", jp_key);
+/// ```
+pub fn gbf_raid_boss_jp_key_from_raw(lang: Language, raid_boss_raw: &RaidBossRaw, translated: &str) -> String {
+  match lang {
+    Language::English => {
+      format!(
+        "{}:{}:{}.{}",
+        GBF_PREFIX, BOSS_KEY_WORD, raid_boss_raw.get_level(), translated,
+      )
+    }
+    Language::Japanese => {
+      format!(
+        "{}:{}:{}.{}",
+        GBF_PREFIX, BOSS_KEY_WORD, raid_boss_raw.get_level(), raid_boss_raw.get_boss_name(),
       )
     }
   }
@@ -226,6 +272,28 @@ mod tests {
     let en_key = gbf_raid_boss_key(Language::English, &raid_boss);
     assert_eq!("gbf:boss:200.Lv200 アーカーシャ", jp_key);
     assert_eq!("gbf:boss:200.Lvl 200 Akasha", en_key);
+  }
+
+  #[test]
+  fn test_gbf_raid_boss_jp_key_from_jp_raw() {
+    let raid_boss_raw = RaidBossRaw::apply_args(
+      "Lv200 アーカーシャ",
+      200,
+      r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+      Language::Japanese,
+    );
+    let translated = "Lvl 200 Akasha";
+    let jp_key = gbf_raid_boss_jp_key_from_raw(Language::Japanese, &raid_boss_raw, translated);
+    assert_eq!("gbf:boss:200.Lv200 アーカーシャ", jp_key);
+    let raid_boss_raw = RaidBossRaw::apply_args(
+      "Lvl 200 Akasha",
+      200,
+      r"https://pbs.twimg.com/media/DumtNdnUYAE9PCr.jpg",
+      Language::English,
+    );
+    let translated = "Lv200 アーカーシャ";
+    let jp_key = gbf_raid_boss_jp_key_from_raw(Language::English, &raid_boss_raw, translated);
+    assert_eq!("gbf:boss:200.Lv200 アーカーシャ", jp_key);
   }
 
   #[test]

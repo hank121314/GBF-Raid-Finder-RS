@@ -6,7 +6,8 @@ use crate::{
   resources::redis::{BOSS_EXPIRE_IN_30_DAYS_TTL, GBF_TRANSLATOR_KEY},
   Redis, Result,
 };
-use log::{info, error};
+
+use log::{error, info};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -81,6 +82,7 @@ pub async fn translator_tasks(
         boss_name, translated_name
       );
       redis.set_multiple_string(map_2_redis).await?;
+
       Some(translated_name.into())
     }
     None => {
@@ -96,10 +98,20 @@ pub async fn translator_tasks(
   }
   .unwrap_or_else(|| "".into());
 
-  let mut names: (&str, &str) = (translated_name.as_str(), raid_boss_raw.get_boss_name());
+  save_translated_raid_boss(&raid_boss_raw, translated_name.as_str(), redis).await
+}
+
+pub async fn save_translated_raid_boss(
+  raid_boss_raw: &RaidBossRaw,
+  translated_name: &str,
+  redis: Arc<Redis>,
+) -> Result<()> {
+  let from_language = Language::from_str(raid_boss_raw.get_language()).unwrap();
+  let mut names: (&str, &str) = (translated_name, raid_boss_raw.get_boss_name());
+
   if from_language == Language::English {
     // The first argument of RaidBoss::apply_args will always be en_name, if from_language is english en_name should be its name.
-    names = (raid_boss_raw.get_boss_name(), translated_name.as_str());
+    names = (raid_boss_raw.get_boss_name(), translated_name);
   }
 
   let raid_boss = RaidBoss::apply_args(names.0, names.1, raid_boss_raw.get_level(), raid_boss_raw.get_image());

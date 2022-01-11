@@ -1,6 +1,6 @@
 use crate::{
   client::redis::Redis,
-  common::redis::{gbf_persistence_raid_tweet_key, gbf_raid_boss_raw_key},
+  common::redis::{gbf_persistence_raid_tweet_key, gbf_raid_boss_jp_key_from_raw, gbf_raid_boss_raw_key},
   error,
   models::{Language, TranslatorResult, Tweet},
   parsers::status::StatusParser,
@@ -130,6 +130,10 @@ impl TweetActor {
                 let _ = respond_to.send(TranslatorResult::Pending);
               }
               false => {
+                // Should update redis expiration of gbf:boss:{level}:{name}.
+                let from_language = Language::from_str(raid_boss_raw.get_language()).unwrap();
+                let redis_key = gbf_raid_boss_jp_key_from_raw(from_language, &raid_boss_raw, translated);
+                self.redis.expire(redis_key, BOSS_EXPIRE_IN_30_DAYS_TTL).await?;
                 let _ = respond_to.send(TranslatorResult::Success {
                   result: translated.to_string(),
                 });

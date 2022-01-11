@@ -36,9 +36,9 @@ impl Redis {
   }
 
   pub async fn mget_protobuf_raw<V, S>(&self, keys: V) -> Result<Vec<Vec<u8>>>
-    where
-      S: Into<String>,
-      V: IntoIterator<Item = S>,
+  where
+    S: Into<String>,
+    V: IntoIterator<Item = S>,
   {
     let redis_keys = keys.into_iter().map(|key| key.into()).collect::<Vec<String>>();
 
@@ -147,6 +147,30 @@ impl Redis {
       .set(&redis_key, bytes)
       .await
       .map_err(|error| error::Error::RedisSetValue { error })?;
+
+    if redis_ttl != 0 {
+      connection
+        .expire(&redis_key, redis_ttl)
+        .await
+        .map_err(|error| error::Error::RedisExpire { error })?;
+    }
+
+    Ok(())
+  }
+
+  pub async fn expire<S, U>(&self, key: S, ttl: U) -> Result<()>
+  where
+    S: Into<String>,
+    U: TryInto<usize> + Copy,
+  {
+    let redis_key = key.into();
+    let redis_ttl = ttl.try_into().map_err(|_| error::Error::U32ToUSize)?;
+
+    let mut connection = self
+      .client
+      .get_tokio_connection()
+      .await
+      .map_err(|error| error::Error::RedisGetConnection { error })?;
 
     if redis_ttl != 0 {
       connection
