@@ -45,11 +45,11 @@ pub async fn stream_bosses(ws: warp::ws::WebSocket, app_state: AppState) {
             msg => Ok(WebsocketMsgType::Request(msg.to_owned())),
           },
           Err(_) => match msg.is_close() {
-            true => Err(error::Error::WebsocketsClientClose),
+            true => Err(error::Error::WebsocketClientClose),
             false => Ok(WebsocketMsgType::NoneString),
           },
         },
-        Err(error) => Err(error::Error::WebsocketsClientError { error }),
+        Err(error) => Err(error::Error::WebsocketClient { error }),
       }
     })
     .then(|result| async {
@@ -126,7 +126,7 @@ fn sending_message(
         Err(error) => {
           app_state.clients.write().await.remove(client_id.as_str());
           info!("Client: {} gone!", client_id);
-          Err(error::Error::WebsocketsClientError { error })
+          Err(error::Error::WebsocketClient { error })
         }
       }
     });

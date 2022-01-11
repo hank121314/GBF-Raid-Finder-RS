@@ -44,11 +44,11 @@ pub enum Error {
   #[snafu(display("Stream get unexpected error."))]
   StreamUnexpected,
 
-  /// Websockets Error
-  #[snafu(display("Websockets client error: {}", error))]
-  WebsocketsClientError { error: warp::Error },
-  #[snafu(display("Websockets client gone"))]
-  WebsocketsClientClose,
+  /// Websocket Error
+  #[snafu(display("Websocket client error: {}", error))]
+  WebsocketClient { error: warp::Error },
+  #[snafu(display("Websocket client gone"))]
+  WebsocketClientClose,
 
   /// Image Comparison Error
   #[snafu(display("Cannot get image from url, error: {}", error))]
