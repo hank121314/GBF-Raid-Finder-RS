@@ -1344,7 +1344,7 @@ dependencies = [
 
 [[package]]
 name = "raid-finder"
-version = "1.0.2"
+version = "1.0.4"
 dependencies = [
  "base64",
  "bytes",
