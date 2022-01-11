@@ -88,6 +88,7 @@ pub enum Error {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct HttpRejection {
   message: String,
   code: u16,
